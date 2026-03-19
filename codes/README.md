@@ -1,4 +1,4 @@
-# DisGReM Code
+# DisGRem Code
 
 Run experiments from this directory:
 

@@ -1,4 +1,4 @@
-# DisGReM: Distributed Gradient Reduction Method
+# DisGRem: Distributed Gradient-Regularized Method
 
 ## Repository Structure
 - paper/ - LaTeX paper sources
