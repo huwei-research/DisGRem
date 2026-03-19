@@ -3,13 +3,13 @@
 \documentclass[review,onefignum,onetabnum]{siamart171218}
 
 % Shared information: packages, macros, title, authors
-\input{disgrempaperv10_shared}
+\input{disgrem_paper_v9_0_shared}
 
 % Optional PDF information
 \ifpdf
 \hypersetup{
   pdftitle={Distributed Gradient-Regularized Newton Method},
-  pdfauthor={W. Hu, P. Xie, Y.-X. Yuan, and L. Zhang}
+  pdfauthor={W. Hu, P. Xie, Y.-x. Yuan, and L. Zhang}
 }
 \fi
 
@@ -22,26 +22,26 @@
 We propose \textsc{DisGrem}, a fully decentralized second-order method
 for convex consensus optimization over networks.
 Each agent solves a local Newton system with vanishing
-gradient-norm regularization $\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$
-and an eigenvalue-shift stabilizer, communicating through a two-stage
-gossip-mixing mechanism.
-We introduce a reference-step framework that reduces the
-network-wide update to an inexact centralized regularized Newton step,
-replacing the static Hessian-heterogeneity assumptions of prior work
-with an increment-based dispersion analysis that imposes no
-irreducible accuracy floor.
-After a lower-order burn-in phase, \textsc{DisGrem} achieves
-$\|\nabla f(\bar x_k)\|\le\varepsilon$ in $\cO(\varepsilon^{-1})$
-iterations---matching the centralized regularized Newton
-rate---without line search or stepsize tuning; the total
-communication cost is $\cO(\varepsilon^{-1}\log(1/\varepsilon))$ rounds.
-Under strong convexity, we further establish local superlinear convergence
-of order $3/2$.
-In our nine-problem benchmark suite, the \textsc{DisGrem} family attains
-$\mathrm{relF}\le 10^{-6}$ on every test instance, whereas every baseline
-stagnates or diverges on at least one problem.
+gradient-norm regularization $\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$,
+augmented by an eigenvalue-shift stabilizer to ensure well-posedness,
+and communicates via two-stage gossip mixing.
+Analytically, we introduce a reference-step framework to reduce the
+network-wide update to an inexact centralized Newton step.
+Coupled with an increment-based dispersion analysis, we bound
+tracker mismatch via Lipschitz differences rather than static heterogeneity
+constants. This eliminates any irreducible accuracy floor and
+establishes an optimal $\cO(\varepsilon^{-1})$ global iteration complexity
+for $\|\nabla f(\bar x_k)\|\le\varepsilon$---matching the centralized
+regularized Newton rate without line search or stepsize tuning.
+A logarithmic mixing schedule yields
+$\cO(\varepsilon^{-1}\log(1/\varepsilon))$ communication rounds,
+and strong convexity gives local superlinear convergence of order $3/2$.
+We further develop variants with Hessian compression
+(\textsc{CeDisGrem}) and adaptive regularization (\textsc{AdaDisGrem}).
+On nine benchmarks (five convex, four nonconvex) against six baselines,
+the \textsc{DisGrem} family reaches relF~$\le 10^{-6}$ on every test
+problem, whereas each baseline stagnates or diverges on at least one.
 \end{abstract}
-
 
 \begin{keywords}
   decentralized optimization, second-order methods, gradient regularization, Newton method, consensus optimization, communication efficiency
@@ -51,107 +51,95 @@ stagnates or diverges on at least one problem.
   90C25, 90C30, 65K05, 68W15
 \end{AMS}
 
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\section{Introduction}\label{sec:intro}
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	We consider the decentralized consensus optimization problem
+	\begin{equation}\label{eq:intro_prob}
+		\min_{x\in\R^d}\; f(x)\;:=\;\frac{1}{N}\sum_{i=1}^N f_i(x),
+	\end{equation}
+	where each local cost $f_i$ is known only to agent~$i$ of a
+	connected network and agents communicate exclusively with their
+	immediate neighbors.
+	Every outer iteration entails one or more gossip rounds, so
+	communication is the dominant cost and
+	reducing the iteration count directly reduces
+	the communication budget.
+	First-order decentralized methods may need prohibitively many
+	iterations on ill-conditioned problems.
+	Second-order information can cut this count substantially, yet
+	decentralized second-order methods face additional difficulties:
+	curvature data are expensive to transmit, and global convergence
+	typically requires stepsize tuning or line search.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Introduction}\label{sec:intro}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-We consider the decentralized consensus optimization problem
-\begin{equation}\label{eq:intro_prob}
-	\min_{x\in\R^d}\; f(x)\;:=\;\frac{1}{N}\sum_{i=1}^N f_i(x),
-\end{equation}
-where each local cost $f_i$ is known only to agent~$i$ of a
-connected network and agents communicate exclusively with their
-immediate neighbors.
-Each outer iteration involves one or more gossip rounds, so communication is a primary bottleneck in decentralized implementations; consequently, reducing the iteration count typically lowers the overall communication budget.
-First-order decentralized methods may need prohibitively many
-iterations on ill-conditioned problems.
-Second-order information can cut this count substantially, yet
-decentralized second-order methods face additional difficulties:
-curvature data are expensive to transmit, and global convergence
-typically requires stepsize tuning or line search.
+	In the centralized setting, the regularized Newton method of
+	\citet{mishchenko2023rn} takes a different approach, updating
+	the iterate via an explicitly regularized system:
+	\[
+	x_{k+1} = x_k - \bigl(\nabla^2 f(x_k) + \lambda_k I\bigr)^{-1} \nabla f(x_k).
+	\]
+	By employing a vanishing regularization parameter
+	$\lambda_k\asymp\sqrt{\|\nabla f(x_k)\|}$, this method achieves
+	the optimal $\cO(1/k^2)$ functional rate under convexity
+	and Lipschitz-continuous Hessians, requiring no line search or
+	stepsize tuning.
+	\citet{doikov2024gradient} show that gradient-norm regularization
+	can replace the more expensive cubic model
+	\citep{nesterov2006cubic,cartis2011arc} while preserving the
+	same complexity guarantees;
+	\citet{ding2025nonconvex} extend the approach to nonconvex
+	objectives via negative-curvature exploitation.
+	A natural question is whether this
+	$\cO(\varepsilon^{-1})$ iteration complexity can be preserved
+	in a fully decentralized setting;
+	to our knowledge, no existing method does so.
+	The difficulty is that the self-regulating regularization
+	$\lambda_k\asymp\sqrt{\|\nabla f(x_k)\|}$ relies on globally
+	consistent gradient and curvature information.
+	When each agent sees only a local approximation corrupted
+	by consensus error, the balance between regularization and curvature
+	breaks down, and existing methods resort to line search or static
+	heterogeneity assumptions to recover convergence.
 
-In the centralized setting, the regularized Newton method of
-\citet{mishchenko2023rn} takes a different approach, updating
-the iterate via an explicitly regularized system:
-\[
-x_{k+1} = x_k - \bigl(\nabla^2 f(x_k) + \lambda_k I\bigr)^{-1} \nabla f(x_k).
-\]
-With a vanishing regularization parameter
-$\lambda_k\asymp\sqrt{\|\nabla f(x_k)\|}$, this method achieves
-the optimal $\cO(1/k^2)$ functional rate under convexity
-and Lipschitz Hessians---equivalently,
-$\|\nabla f(x_k)\|\le\varepsilon$ in $\cO(\varepsilon^{-1})$
-iterations---requiring no line search or stepsize tuning.
-\citet{doikov2024gradient} show that gradient-norm regularization
-can replace the more expensive cubic model
-\citep{nesterov2006cubic,cartis2011arc} while preserving the
-same complexity guarantees;
-\citet{gratton2023nonconvex} extend the approach to nonconvex
-objectives via negative-curvature exploitation.
-A natural question is whether this $\cO(\varepsilon^{-1})$ iteration complexity can be preserved in a fully decentralized setting.
-The difficulty is that the vanishing regularization
-$\lambda_k\asymp\sqrt{\|\nabla f(x_k)\|}$ relies on globally
-consistent gradient and curvature information.
-When each agent sees only a local approximation corrupted
-by consensus error, the balance between regularization and curvature
-breaks down, and existing methods resort to line search or static
-heterogeneity assumptions to recover convergence.
-
-Two specific challenges arise.
-First, each agent inverts a local regularized system whose
-average generally differs from the global Newton step; this gap
-depends on inter-agent agreement and must be controlled without
-static heterogeneity constants.
-Second, Hessian trackers can become transiently indefinite due to
-imperfect consensus, threatening the well-posedness of local solves.
-Our algorithm \textsc{DisGrem} (Distributed Gradient-Regularized
-Newton Method) addresses the first challenge through an increment-based
-dispersion recursion that bounds tracker mismatch via Lipschitz
-differences, and the second through an eigenvalue-shift
-stabilizer that ensures well-posedness at every iteration.
-\textsc{DisGrem} requires only a single scaling parameter $M\ge L_2$
-and does not need any stepsize schedule or line search.
-To our knowledge, no prior fully decentralized method achieves
-$\cO(\varepsilon^{-1})$ convergence to arbitrary accuracy
-with gradient-norm regularization under these conditions.
+	Two technical challenges arise.
+	First, each agent inverts a \emph{local} regularized system whose
+	average generally differs from the global Newton step; this gap
+	depends on inter-agent agreement and must be controlled without
+	static heterogeneity constants.
+	Second, Hessian trackers can become transiently indefinite due to
+	imperfect consensus, threatening the well-posedness of local solves.
+	Our algorithm \textsc{DisGrem} (Distributed Gradient-Regularized
+	Newton Method) addresses the first challenge through an increment-based
+	dispersion recursion that bounds tracker mismatch via Lipschitz
+	\emph{differences}, and the second through an eigenvalue-shift
+	stabilizer that ensures well-posedness at every iteration.
+	To our knowledge, no prior decentralized method achieves
+	$\cO(\varepsilon^{-1})$ convergence to arbitrary accuracy
+	with gradient-norm regularization while avoiding stepsize tuning and
+	static Hessian-heterogeneity constants.
+	
+\textsc{DisGrem} requires a single scaling parameter
+$M\ge L_2$ (the Hessian Lipschitz constant) and involves no stepsize schedule or line search.
 
 We summarize our main contributions as follows:
 \begin{itemize}[leftmargin=1.5em]
-\item \textbf{A fully decentralized gradient-regularized Newton framework.}
-We propose \textsc{DisGrem}, in which each agent solves a local Newton system
-with vanishing regularization $\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$.
-A two-stage gossip mechanism and an eigenvalue-shift stabilizer ensure that
-all local systems remain well posed without line search or explicit positive-semidefinite (PSD) projection.
-
-\item \textbf{An analytical reduction to an inexact centralized Newton step.}
-We introduce a reference-step construction that quantifies the gap between the
-averaged local step and the ideal global Newton step, thereby reducing the
-decentralized dynamics to an inexact centralized regularized Newton iteration.
-This framework also replaces the usual static heterogeneity assumption by an
-increment-based dispersion recursion and derives iterate boundedness directly
-from coercivity.
-
-\item \textbf{Sharp global and local guarantees.}
-After a lower-order burn-in phase, we prove an $\cO(\varepsilon^{-1})$ global
-iteration complexity for achieving $\|\nabla f(\bar x_k)\|\le\varepsilon$,
-matching the centralized regularized Newton rate. Under a logarithmic
-mixing schedule, this leads to $\cO(\varepsilon^{-1}\log(1/\varepsilon))$
-communication rounds.
-Under strong convexity, we further establish local $Q$-superlinear convergence
-of order $3/2$.
-
-\item \textbf{Practical variants and empirical robustness.}
-We develop communication-efficient and adaptive variants, namely
-\textsc{CeDisGrem} and \textsc{AdaDisGrem}. Across nine benchmark problems,
-the \textsc{DisGrem} family achieves the best overall accuracy--robustness
-balance among the tested methods, while \textsc{AdaDisGrem} achieves the
-highest robustness in the multi-start experiments.
+	\item \textbf{A fully decentralized gradient-regularized Newton framework.} We design \textsc{DisGrem}, wherein each agent solves a local Newton system with vanishing regularization $\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$. By integrating two-stage mixing to decouple consensus accuracy from the local solve, and an eigenvalue-shift stabilizer to handle transient indefiniteness, we guarantee that every local system remains well-posed and self-regulated without explicit PSD projections.
+	
+	\item \textbf{Novel analytical framework eliminating restrictive assumptions.} We introduce a \emph{reference-step} construction that bounds the gap between the average local step and the ideal global Newton step, rigorously reducing the network-wide update to an \emph{inexact regularized Newton step}. Furthermore, we eliminate two severe bottlenecks common in the literature: we replace the static Hessian-heterogeneity constant with an increment-based dispersion recursion (ensuring transient consensus error with no accuracy floor), and we establish iterate boundedness directly from objective coercivity via a generalized Lyapunov argument (Lemma~\ref{lem:lyap_bound}), replacing the standard ``bounded iterates'' assumption.
+	
+	\item \textbf{Optimal global complexity and local superlinear rates.} We prove an $\cO(\varepsilon^{-1})$ global iteration complexity to achieve $\|\nabla f(\bar x_k)\|\le\varepsilon$ (Theorem~\ref{thm:main}), matching the centralized regularized Newton rate without requiring line searches or stepsize tuning. Under a logarithmic mixing schedule, this requires $\cO(\varepsilon^{-1}\log(1/\varepsilon))$ communication rounds. Furthermore, we establish local $Q$-superlinear convergence of order $3/2$ under strong convexity (Theorem~\ref{thm:superlinear}), and characterize convergence to an $\cO(\rho^{N_c})$-neighborhood under practical fixed-depth mixing (Corollary~\ref{cor:fixed_nc}).
+	
+	\item \textbf{Practical variants and empirical robustness.} To address communication and parameter-tuning costs, we develop two practical variants: \textsc{CeDisGrem} (using low-rank Hessian compression) and \textsc{AdaDisGrem} (adapting $M$ online via secant estimation). Extensive benchmarking demonstrates that the \textsc{DisGrem} family strictly outperforms existing first- and second-order baselines, successfully converging on all nine tested convex and nonconvex problems where baselines stagnate or diverge, with \textsc{AdaDisGrem} attaining an 80\% success rate in robustness trials.
 \end{itemize}
 
-Section~\ref{sec:related} reviews related work.
-Sections~\ref{sec:prelim}--\ref{sec:theory} present the notation, assumptions, algorithmic variants, and convergence theory.
-Section~\ref{sec:experiments} reports numerical results.
-Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, while Appendix~\ref{app:supp_exp} reports supplementary experiments.
+Section~\ref{sec:related} surveys related work.
+Section~\ref{sec:prelim} fixes notation and states standing assumptions.
+Section~\ref{sec:alg} describes the algorithm and its practical variants.
+Section~\ref{sec:theory} develops the convergence theory, beginning
+with iterate boundedness and a proof roadmap.
+Section~\ref{sec:experiments} presents numerical experiments.
+Proofs are collected in
+Appendices~\ref{app:dispersion}--\ref{app:proofs}.
 
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	\section{Related work}\label{sec:related}
@@ -165,41 +153,40 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 	constant-stepsize methods through correction steps or primal-dual
 	reformulations.
 	Gradient tracking
-	\citep{nedic2017diging,xin2020distributed,pu2021distributed}
+	\citep{nedic2017diging,xin2019distributed,pu2021distributed}
 	achieves exact convergence with a single doubly stochastic matrix
 	by accumulating gradient increments;
-	\citet{alghunaim2021decentralized} unify these two perspectives.
+	\citet{alghunaim2020decentralized} unify these two perspectives.
 	These methods converge at $\cO(1/k)$ or linearly for strongly convex
 	objectives, but the per-iteration improvement depends on
 	$(1-\rho)^{-1}$ or $(1-\rho)^{-2}$, a severe penalty on poorly
 	connected graphs.
-	Acceleration \citep{jakovetic2014fast,li2024decentralized} and
+	Acceleration \citep{jakovetic2014fast,li2021decentralized} and
 	communication compression
-	\citep{koloskova2019decentralized,beznosikov2022biased} are
+	\citep{koloskova2019decentralized,beznosikov2023biased} are
 	orthogonal improvements; we adopt the latter for Hessian data
 	in Section~\ref{ssec:variants}.
 
 	\noindent\textbf{Second-order and quasi-Newton decentralized methods.}
-	Network Newton~\citep{mokhtari2017networknewton} approximates
+	Network Newton~\citep{mokhtari2015networknewton_arxiv} approximates
 	the global Newton direction via a truncated Hessian power series;
-	Newton tracking~\citep{zhang2021newtontracking} embeds Newton-type
+	Newton tracking~\citep{mokhtari2020newtontracking} embeds Newton-type
 	updates into gradient tracking.
-	DQM~\citep{eisen2017dqn} replaces exact Hessians with BFGS
-	surrogates; \citet{bajovic2017newton} studies distributed
-	Newton-type corrections with diagonal approximations, and
-	\citet{li2020communication} propose communication-efficient
-	approximate Newton and variance-reduced methods for networked optimization.
+	DQM~\citep{eisen2017dqn} replaces exact Hessians with L-BFGS
+	surrogates; \citet{bajovic2017newton} and
+	\citet{zhang2021distributed} study other distributed Newton-type
+	corrections.
 	ESOM~\citep{mokhtari2016esom} combines exact second-order information
-	with an alternating direction method of multipliers (ADMM) consensus step.
+	with an ADMM consensus step.
 	SONATA~\citep{sun2022sonata} solves a sequence of strongly convex
 	local surrogates and handles nonconvex objectives, while
-	Network-GIANT~\citep{maritan2023networkgiant} constructs a global Newton
+	Network-GIANT~\citep{ye2023networkgiant} constructs a global Newton
 	direction through harmonic-mean Hessian consensus.
 	All of these methods require explicit stepsize tuning, penalty
 	parameter selection, or line search.
-	Furthermore, to the best of our knowledge, none attains the optimal
-	centralized Newton iteration complexity of $\cO(1/k^2)$ for general
-	convex problems in a rigorous global sense.
+	Furthermore, none attains the optimal centralized Newton iteration
+	complexity of $\cO(1/k^2)$ for general convex problems in a
+	rigorous global sense.
 	While exact methods like ESOM and Newton tracking can reach
 	arbitrary precision for strongly convex objectives, their
 	convergence heavily relies on static Hessian-heterogeneity
@@ -208,7 +195,7 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 	heterogeneity or suffer from an irreducible accuracy floor
 	$\|\nabla f(\bar x)\|\le\cO(\sigma_H)$.
 	\citet{daneshmand2021newton} pursue a different approach, combining
-	gradient tracking with cubic regularization and local Hessian
+	gradient tracking with \emph{cubic} regularization and local Hessian
 	subsampling to achieve an iteration count comparable to centralized
 	cubic Newton.
 	However, their convergence guarantee holds only up to the statistical
@@ -221,14 +208,14 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 
 	\noindent\textbf{Communication-efficient and inversion-free approaches.}
 	The $\cO(d^2)$ per-round cost of transmitting Hessian data and
-	the $\cO(d^3)$ cost of solving Newton systems are the two main
+	the $\cO(d^3)$ cost of solving Newton systems are two principal
 	bottlenecks of decentralized second-order methods.
-	\citet{zhang2024cubic} combine lazy Hessian updates with
+	\citet{zhang2024distributed} combine lazy Hessian updates with
 	compression for distributed cubic Newton but rely on a central
 	parameter server; our \textsc{CeDisGrem} achieves analogous
 	savings in a fully peer-to-peer topology.
-	On the computation side, DINAS~\citep{jakovetic2025dinas} avoids
-	Hessian inversion through iterative linear solvers, and
+	On the computation side, DINAS~\citep{crane2025dinas} avoids
+	Hessian inversion through conjugate-gradient solvers, and
 	INDO~\citep{yuan2023indo} proposes an inversion-free method for
 	consensus optimization.
 	Incorporating such inexact solvers into the \textsc{DisGrem}
@@ -247,10 +234,12 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 	\citet{doikov2024gradient} establish that gradient-norm
 	regularization can replace the cubic model across a broad class of
 	problems.
-	\citet{gratton2023nonconvex} extend it to nonconvex objectives via
-	negative-curvature exploitation.
-	\citet{doikov2022tensor} study local convergence of higher-order
-	tensor methods, and \citet{doikov2023lazy} analyze lazy Hessian
+	\citet{ding2025nonconvex} extend it to nonconvex objectives via
+	negative-curvature exploitation; given that the centralized
+	nonconvex extension is very recent, the convex case is the
+	appropriate starting point for decentralization.
+	\citet{doikov2021optimization} study higher-order tensor
+	regularization, and \citet{hanzely2022newton} analyze lazy Hessian
 	updates in the centralized setting, an idea we also explore in
 	Section~\ref{ssec:commexp}.
 	We are not aware of prior work that combines gradient-norm
@@ -277,8 +266,8 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 	$W_{ij}\ge0$, $W\one=\one$, $\one^\top W=\one^\top$.
 	Let $\J:=\frac{1}{N}\one\one^\top$ denote the averaging projector,
 	$\Pmat:=I-\J$ the complementary projector, and
-	$\rho := \normtwo{W-\J}\in[0,1)$ the mixing rate (so that $1{-}\rho$ is the spectral gap);
-	$\rho<1$ for any connected undirected graph.
+	$\rho := \normtwo{W-\J}\in[0,1)$ the mixing rate (so that $1{-}\rho$ is the spectral gap), which is
+	strictly less than $1$ for any connected undirected graph.
 	For stacked vectors $Z=[z_1;\dots;z_N]\in\R^{Nd}$ we use the
 	Euclidean norm $\|Z\|$ and write $\bar z:=\frac1N\sum_{i=1}^N z_i$
 	for the average.
@@ -291,7 +280,7 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 	Then
 	\begin{align*}
 	\nabla F(X)&=[\nabla f_1(x_1);\dots;\nabla f_N(x_N)]\in\R^{Nd},\\
-	\nabla^2 F(X)&=\blkdiag\bigl(\nabla^2 f_1(x_1),\dots,\nabla^2 f_N(x_N)\bigr).
+	\nabla^2 F(X)&=\mathrm{blkdiag}\bigl(\nabla^2 f_1(x_1),\dots,\nabla^2 f_N(x_N)\bigr).
 	\end{align*}
 	We also introduce the stacked Hessian vectorization
 	\[
@@ -301,7 +290,7 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 	For the consensus problem \eqref{eq:intro_prob}, we write
 	$f(x)=\frac1N\sum_{i=1}^N f_i(x)$, $g(x)=\nabla f(x)$, and $H(x)=\nabla^2 f(x)$.
 	
-	Table~\ref{tab:notation} collects the main symbols used
+	Table~\ref{tab:notation} collects the principal symbols used
 	throughout the paper.
 	
 	\begin{table}[htbp]
@@ -320,9 +309,8 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 			$X_k$ & stacked vector $[x_{1,k};\dots;x_{N,k}]\in\R^{Nd}$ \\
 			$\tilde x_{i,k}$, $\tilde g_{i,k}$, $\tilde H_{i,k}$ & pre-mixed quantities (after $\tau_k$ gossip rounds) \\
 			$g_{i,k}$, $H_{i,k}$ & gradient and Hessian trackers \\
-			$\tilde G_k$ & stacked pre-mixed gradient trackers $[\tilde g_{1,k};\dots;\tilde g_{N,k}]$ \\
 			$W$ & doubly stochastic mixing matrix \\
-			$\rho:=\|W-\J\|_2$ & mixing rate ($1{-}\rho$ is the spectral gap) \\
+			$\rho:=\|W-\J\|_2$ & spectral gap parameter \\
 			$\tau_k$, $t_k$ & pre-mixing and post-mixing depths \\
 			$N_c$ & fixed mixing depth (practical regime) \\
 			$D(Z)$ & RMS dispersion $\bigl(\frac1N\sum_i\|z_i-\bar z\|^2\bigr)^{1/2}$ \\
@@ -336,8 +324,8 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 	\end{table}
 	
 	To quantify disagreement among agents, for a stacked vector $Z=[z_1;\dots;z_N]\in\R^{Nd}$
-	we write $\bar z=\frac1N\sum_{i=1}^N z_i$ and define the root-mean-square (RMS) dispersion
-	(also called consensus error or disagreement in the
+	we write $\bar z=\frac1N\sum_{i=1}^N z_i$ and define the RMS dispersion
+	(also called \emph{consensus error} or \emph{disagreement} in the
 	decentralized optimization literature, see e.g.\
 	\citet{nedic2009subgradient,nedic2017diging})
 	\(
@@ -347,7 +335,7 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 	$\tilde G_k:=[\tilde g_{1,k};\dots;\tilde g_{N,k}]$ for the stacked gradient trackers,
 	$D(X_k)$ and $D(\tilde G_k)$ measure the primal and gradient-tracker disagreements at iteration $k$.
 
-	\subsection{Assumptions}
+	\subsection{Standing assumptions}
 	\begin{assumption}\label{ass:standing}
 		\begin{enumerate}[nosep,leftmargin=1em]
 		\item Each $f_i$ is convex and twice continuously differentiable
@@ -386,72 +374,48 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 	requires mimicking the global Newton step without a central
 	coordinator.
 	This presents three coupled mathematical and algorithmic
-	difficulties, which motivate the design of \textsc{DisGrem}.
+	difficulties, which inform the core design of \textsc{DisGrem}.
 
 	\noindent\textbf{1.\ The gap between averaging and inversion.}
-	The ideal centralized step solves the global average system
-	\[
-	s_k^{\star}
-	\;=\;
-	-\Bigl(\frac{1}{N}\sum_{i=1}^{N}\nabla^2 f_i(\bar x_k)
-	       +\lambda_k I\Bigr)^{\!-1}
-	\frac{1}{N}\sum_{i=1}^{N}\nabla f_i(\bar x_k).
-	\]
-	In a decentralized network, each agent~$i$ solves a local regularized
-	system and produces a local step
-	$s_{i,k}=-(\tilde H_{i,k}+\tilde\lambda_{i,k}I)^{-1}\tilde g_{i,k}$.
-	Due to the non-commutativity of averaging and matrix inversion,
-	\[
-	\bar s_k
-	\;=\;
-	\frac{1}{N}\sum_{i=1}^{N}
-	  \bigl(\tilde H_{i,k}+\tilde\lambda_{i,k}I\bigr)^{-1}\tilde g_{i,k}
-	\;\neq\;
-	\Bigl(\frac{1}{N}\sum_{i=1}^{N}
-	  \bigl(\tilde H_{i,k}+\tilde\lambda_{i,k}I\bigr)\Bigr)^{\!-1}
-	\frac{1}{N}\sum_{i=1}^{N}\tilde g_{i,k},
-	\]
-	the averaged step $\bar s_k$ deviates from $s_k^{\star}$ in general.
-	This discrepancy is governed by the inter-agent disagreement in
-	$(x_{i,k},g_{i,k},H_{i,k})$.
-	\textsc{DisGrem} mitigates it by introducing a multi-round
-	pre-mixing stage that drives the local inputs closer to their
-	network-wide means, tightly controlling the step dispersion.
+	The ideal centralized method inverts the global average system
+	$(\nabla^2 f(\bar x_k)+\lambda_k I)^{-1}$.
+	In a network, each agent must solve a \emph{local} regularized
+	system.
+	Because the average of matrix inverses is not the inverse of the
+	average, the resulting average step
+	$\bar s_k=\frac1N\sum_i s_{i,k}$ inevitably deviates from the
+	idealized global step.
+	\textsc{DisGrem} mitigates this by introducing a multi-round
+	pre-mixing stage, which drives the local inputs
+	$(x_{i,k},g_{i,k},H_{i,k})$ closer to their network-wide means,
+	tightly controlling the step dispersion.
 
 	\noindent\textbf{2.\ Transient indefiniteness from imperfect consensus.}
 	Decentralized tracking propagates Hessian increments
 	$\nabla^2 f_j(x_{j,k+1})-\nabla^2 f_j(x_{j,k})$ across
 	the network.
-	Although the true local Hessians satisfy $\nabla^2 f_i(x)\succeq 0$
-	for convex objectives, the tracked surrogate decomposes as
-	\[
-	\tilde H_{i,k}
-	\;=\;
-	\underbrace{\nabla^2 f(\bar x_k)}_{\succeq\,0}
-	\;+\;
-	\underbrace{\bigl(\tilde H_{i,k}-\nabla^2 f(\bar x_k)\bigr)}_{\text{tracking error}},
-	\]
-	where the tracking error accumulates gossip-mixed Hessian increments
-	and can have negative eigenvalues.
-	During the transient phase before consensus is reached,
-	$\lambda_{\min}(\tilde H_{i,k})$ may be negative, rendering
-	the local system ill-posed.
-	We introduce an eigenvalue-shift stabilizer
+	Although the true local Hessians are positive semidefinite for
+	convex objectives, the tracked surrogate $\tilde H_{i,k}$
+	aggregates delayed differences.
+	During the transient phase before exact consensus is reached,
+	these tracking errors can render the local matrix indefinite,
+	threatening the well-posedness of the Newton solve.
+	We introduce an \emph{eigenvalue-shift stabilizer}
 	$\delta_{i,k}:=\max\{0,-\lambda_{\min}(\tilde H_{i,k})\}$ to
 	guarantee a uniformly positive definite system at every node,
 	at every iteration.
 
 	\noindent\textbf{3.\ Stepsize-free local regularization.}
-	The vanishing choice
+	The self-regulating choice
 	$\lambda_k\asymp\sqrt{\|\nabla f(\bar x_k)\|}$ is responsible
 	for the optimal $\cO(1/k^2)$ centralized rate.
 	In the absence of global gradient knowledge, \textsc{DisGrem}
 	sets a local vanishing regularizer
 	$\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$.
-	The scaling parameter $M\ge L_2$ acts as a damping
+	The scaling parameter $M\ge L_2$ implicitly acts as a damping
 	mechanism: it bounds the local step magnitude
 	($\|s_{i,k}\|\le\sqrt{\|\tilde g_{i,k}\|/M}$) analogous to a
-	trust-region radius, removing the need for
+	trust-region radius, but completely eliminates the need for
 	per-iteration stepsize tuning or line search.
 	
 	\subsection{\textsc{DisGrem}: full algorithm}\label{ssec:disgrem}
@@ -464,7 +428,7 @@ Appendices~\ref{app:dispersion} and~\ref{app:proofs} collect the longer proofs, 
 \label{alg:disgrem}
 \small
 \begin{algorithmic}[1]
-\State \textbf{Input:} $\{x_{i,0}\}$, $W$, $M>0$, mixing schedule $\{\tau_k, t_k\}$.
+\State \textbf{Input:} $\{x_{i,0}\}$, $W$, $L_1,L_2$, $M\ge L_2$.
 \State \textbf{Initialize:} $g_{i,0}\gets\nabla f_i(x_{i,0})$, $H_{i,0}\gets\nabla^2 f_i(x_{i,0})$ for all $i$.
 \For{$k=0,1,2,\dots$}
 \State \textbf{(A) Pre-mixing} ($\tau_k\ge 1$ gossip rounds):
@@ -492,9 +456,8 @@ In each round every agent $i$ sends messages to and receives messages from its $
 In \textsc{DisGrem}, the natural payload exchanged per neighbor per round consists of
 two $d$-dimensional vectors ($2d$ floats) and
 one $d\times d$ symmetric matrix ($\tfrac{d(d+1)}{2}$ floats).
-The post-mixing step~(C) and the tracker-update step~(D) must be performed sequentially.
-Agent $i$ must first receive the mixed $y$ variables to compute $x_{i,k+1}$; only then can it evaluate the exact gradients and Hessians at $x_{i,k+1}$ to form the tracker inputs.
-Consequently, step~(C) requires $t_k$ rounds and step~(D) requires an additional $t_k$ rounds, giving a total of $(\tau_k+2t_k)$ communication rounds per outer iteration.
+Equivalently, the two vectors can be concatenated into a single $2d$-vector; this does not change the byte complexity.
+The post-mixing step~(C) and the tracker-update step~(D) must be performed sequentially: agent $i$ must first receive the mixed $y$ variables to compute $x_{i,k+1}$, and only then can it evaluate the exact gradients and Hessians at $x_{i,k+1}$ to form the tracker inputs. Consequently, step~(C) requires $t_k$ rounds and step~(D) requires an additional $t_k$ rounds. The total number of communication rounds per outer iteration is therefore $(\tau_k+2t_k)$.
 
 Let $n_v$ denote the number of $d$-vectors transmitted per round (for \textsc{DisGrem}, $n_v=2$).
 With double precision (8 bytes per float), the sent message volume per agent per outer iteration is
@@ -507,14 +470,43 @@ $C_{\mathrm{iter}}^{\mathrm{send+recv}}(k)=2\,C_{\mathrm{iter}}^{\mathrm{send}}(
 All communication figures reported in Section~\ref{sec:experiments}
 use the send+recv per-agent convention.
 
+For the default experimental setting $N{=}10$, $d{=}30$, and an Erd\H{o}s--R\'enyi (ER)
+graph with $p{=}0.5$ (average degree $|\mathcal N_i|\approx 4.5$),
+taking $\tau_k=t_k=3$ (so $\tau_k+2t_k=9$) and $n_v=2$ yields
+\[
+C_{\mathrm{iter}}^{\mathrm{send}}\!\approx\! 9\!\times\! 4.5\!\times\!(60\!+\!465)\!\times\! 8
+\!\approx\! 170\,\text{kB/agent/iter}.
+\]
+This is consistent with the empirical communication magnitudes reported in
+Table~\ref{tab:summary} (up to graph-degree variability and implementation details).
+	
 	\subsection{Practical variants}\label{ssec:variants}
 
-We develop three practical variants of Algorithm~\ref{alg:disgrem}:
-two address communication cost and parameter selection individually,
-while a third combines both mechanisms.
-All variants share the same four-step structure and differ only in the
-Hessian-tracker and regularization-parameter modules
-(see Table~\ref{tab:family} at the end of this section for a summary).
+	Table~\ref{tab:family} summarizes the four variants developed in this
+	section.
+	All share the core structure of Algorithm~\ref{alg:disgrem};
+	the variants differ only in the Hessian-tracker and
+	regularization-parameter modules highlighted in the table.
+
+	\begin{table}[htbp]
+		\centering
+		\caption{The \textsc{DisGrem} algorithm family.
+			All variants use the same four-step structure (Algorithm~\ref{alg:disgrem});
+			differences are confined to the Hessian communication and the choice of~$M$.}
+		\label{tab:family}
+		\setlength{\tabcolsep}{4pt}
+		\small
+		\begin{tabular}{lccc}
+			\toprule
+			Variant & Hessian & $M$ & Extra parameter(s) \\
+			\midrule
+			\textsc{DisGrem}       & exact tracking       & fixed  & $M$ \\
+			\textsc{CeDisGrem}     & compressed + lazy     & fixed  & $M$, rank~$r$, $K_{\mathrm{lazy}}$ \\
+			\textsc{AdaDisGrem}    & exact tracking       & adaptive & $\hat M_{i,0}$, $\gamma$, $\zeta$ \\
+			\textsc{CeAdaDisGrem}  & compressed + lazy     & adaptive & all of the above \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
 
 \textsc{CeDisGrem} reduces communication by compressing Hessian data.
 The dominant communication cost of \textsc{DisGrem} is the $\frac{d(d+1)}{2}$-dimensional
@@ -549,7 +541,7 @@ Empirically, $r=\lceil d/5\rceil$ reduces communication by 30--50\% with negligi
 The exact eigendecomposition of $\Delta H_{j,k}\in\R^{d\times d}$
 costs $\cO(d^3)$ per agent per iteration---the same order as the
 Newton-system solve.
-When $d$ is large, randomized singular value decomposition (SVD)
+When $d$ is large, randomized SVD
 (cost $\cO(d^2 r)$) or Nystr\"om-type approximations can replace
 the exact decomposition.
 The additional approximation error enters the tracker dispersion
@@ -575,21 +567,31 @@ regularization margin, though we do not pursue this formally here.
 	curvature stabilizes, enabling larger Newton steps near the solution;
 	the cap prevents transient large Hessian increments from inflating
 	the estimate.
-	This mechanism removes the need to specify $L_2$ a priori
+	This mechanism removes the need to specify $L_2$ \emph{a priori}
 	at the cost of a mild adaptation lag.
-	Note that $\hat L_{i,k}$ is a per-iterate secant
-	approximation, distinct from the static proxy
+	Here $\hat L_{i,k}$ is a per-iterate secant
+	approximation to the \emph{local} Hessian Lipschitz constant,
+	distinct from the static proxy
 	$H_{\max}^0 := \max_i\|\nabla^2 f_i(x_0)\|_2$ used to
-	scale the default $M$ (Section~\ref{ssec:practical}).
-	Because the secant ratio probes curvature along a single
-	direction, it may underestimate $L_2$;
-	the max-smoothing and cap $\eta_c$ prevent the estimate
-	from collapsing.
-	A complete theoretical analysis showing that
-	$\hat M_{i,k}\ge L_2$ eventually remains open;
-	Section~\ref{ssec:ada} provides an empirical study
-	confirming robustness across a $100\times$ range of initial
-	$\hat M_{i,0}$.
+	scale the default $M$ and baseline stepsizes (Section~\ref{ssec:practical}).
+	Since the secant ratio is a one-dimensional finite-difference
+	approximation of the operator-norm Lipschitz constant, it may
+	underestimate $L_2$ when the dominant curvature variation occurs
+	along directions orthogonal to $x_{i,k}-x_{i,k-1}$.
+	Near a strongly convex minimizer with $\nabla^2 f(x_\star)\succ 0$,
+	$\hat L_{i,k}$ converges to the directional second
+	derivative of the Hessian map along the Newton direction, which
+	coincides with $L_2$ when the curvature variation is isotropic.
+	In general, $\hat L_{i,k}$ provides a lower bound on $L_2$
+	restricted to the one-dimensional secant subspace; the
+	max-smoothing ($\hat M_{i,k}\ge\zeta\hat L_{i,k}$) and the cap
+	$\eta_c$ together prevent the estimate from collapsing to zero.
+	A complete theoretical treatment---in particular, showing that
+	$\hat M_{i,k}\ge L_2$ eventually under suitable regularity
+	conditions---remains open;
+	Section~\ref{ssec:ada} provides an extensive empirical study
+	showing that \textsc{AdaDisGrem} is robust to the initial
+	$\hat M_{i,0}$ across a $100\times$ range.
 	The following proposition establishes a conditional convergence
 	guarantee, showing that the same complexity bounds apply once
 	the adaptive estimates exceed the Hessian Lipschitz constant.
@@ -627,76 +629,65 @@ regularization margin, though we do not pursue this formally here.
 	the two mechanisms is nontrivial: Section~\ref{ssec:commexp} shows
 	that this combination performs well at moderate precision but may slow
 	convergence at very high precision.
-
-	Table~\ref{tab:family} summarizes the full \textsc{DisGrem} family.
-	All members share the core structure of Algorithm~\ref{alg:disgrem};
-	differences are confined to the Hessian-tracker and
-	regularization-parameter modules.
-
-	\begin{table}[htbp]
-		\centering
-		\caption{The \textsc{DisGrem} algorithm family.
-			All variants use the same four-step structure (Algorithm~\ref{alg:disgrem});
-			differences are confined to the Hessian communication and the choice of~$M$.}
-		\label{tab:family}
-		\setlength{\tabcolsep}{4pt}
-		\small
-		\begin{tabular}{lccc}
-			\toprule
-			Variant & Hessian & $M$ & Extra parameter(s) \\
-			\midrule
-			\textsc{DisGrem}       & exact tracking       & fixed  & $M$ \\
-			\textsc{CeDisGrem}     & compressed + lazy     & fixed  & $M$, rank~$r$, $K_{\mathrm{lazy}}$ \\
-			\textsc{AdaDisGrem}    & exact tracking       & adaptive & $\hat M_{i,0}$, $\gamma$, $\zeta$ \\
-			\textsc{CeAdaDisGrem}  & compressed + lazy     & adaptive & $\hat M_{i,0}$, $\gamma$, $\zeta$, rank~$r$, $K_{\mathrm{lazy}}$ \\
-			\bottomrule
-		\end{tabular}
-	\end{table}
 	
 	\subsection{Practical guidelines for parameter selection}\label{ssec:practical}
 	
-	The theoretical convergence requires $M\ge L_2$
-	(Theorem~\ref{thm:main}).
-	When the Hessian Lipschitz constant $L_2$ is unknown, $M$ acts as a
-	robustness parameter: larger values increase damping and ensure
-	well-conditioning, though potentially slowing asymptotic convergence.
-	A practical default is
-	$M = M_{\mathrm{fac}} \cdot H_{\max}^{0}$, where
+	Theorem~\ref{thm:main} requires the scaling factor to satisfy $M\ge L_2$
+	(the Hessian Lipschitz constant, \emph{not} the gradient Lipschitz
+	constant $L_1$).
+	When $L_2$ is unknown---as is the common case---$M$ can be treated
+	as a robustness parameter: larger $M$ increases damping and ensures the
+	regularized Newton step remains well-conditioned, at the cost of
+	slower asymptotic convergence.
+	A practical default is $M = M_{\mathrm{fac}} \cdot H_{\max}^{0}$ where
 	$H_{\max}^{0} := \max_i\|\nabla^2 f_i(x_0)\|_2$ is a readily
-	computable baseline curvature proxy and
-	$M_{\mathrm{fac}} \in [0.1, 15]$ is a tuning factor that scales
-	with the problem's ill-conditioning.
-	While this heuristic does not strictly enforce $M\ge L_2$,
-	\textsc{AdaDisGrem} fully automates the choice via online secant
-	estimation.
+	computable Hessian-norm proxy;
+	Table~\ref{tab:config} lists per-function values of $M_{\mathrm{fac}}$
+	ranging from $0.1$ (well-conditioned convex) to $15$ (multimodal nonconvex).
+	We stress that $H_{\max}^{0}$ is \emph{not} an estimate of the Hessian
+	Lipschitz constant~$L_2$; the theoretical condition $M\ge L_2$
+	is not directly enforced by this default.
+	\textsc{AdaDisGrem} addresses the gap via online secant-based
+	estimation of~$L_2$ (Section~\ref{ssec:ada}), and the
+	adaptive-mechanism experiments show that convergence is robust
+	across a $20\times$ range of initial $M$ values.
 
 	The theory requires the mixing depths to satisfy
-	$\tau_k = t_k = \cO\bigl(\log(1/\|\tilde{\bar g}_k\|)\bigr)$.
-	In practice, a fixed $N_c = 3$--$5$ rounds per stage is sufficient
+	$\tau_k, t_k = \cO(\log 1/\|\tilde{\bar g}_k\|)$, which grows
+	logarithmically. In practice, a fixed $N_c = 3$--$5$ rounds per stage is sufficient
 	for most networks with $\rho \le 0.95$.
-	For strongly sparse networks ($\rho > 0.97$), increasing $N_c$ to
-	$8$--$10$ improves stability.
+	For strongly sparse networks ($\rho > 0.97$), increasing $N_c$ to $8$--$10$
+	significantly improves stability.
 
 	For the Hessian compression rank $r$ in \textsc{CeDisGrem},
-	$r = \lceil d/5 \rceil$ serves as a robust default, while $r=1$
-	often suffices for diagonally dominant objectives.
-	Alternatively, element-wise top-$k$ sparsification performs comparably.
-	To further reduce communication, the Hessian tracker update
-	(step~(D) of Algorithm~\ref{alg:disgrem}) can be executed every
-	$K_{\mathrm{lazy}}$-th iteration.
-	Reusing the previous Hessian for
-	$K_{\mathrm{lazy}}\in\{5,10\}$ consecutive steps reduces
-	payload bytes with minimal impact on convergence for slowly varying
-	problems.
+	we recommend $r = \lceil 0.2d \rceil$ as a default; increase $r$ if convergence slows.
+	For diagonal-dominant Hessians (e.g.\ $\ell_2$-regularized losses), even $r=1$
+	is often sufficient.
+	Alternatively, element-wise top-$k$ sparsification of $\Delta H_{j,k}$
+	can replace the low-rank truncation at comparable cost; we compare both in
+	Section~\ref{ssec:commexp}.
+
+	The Hessian tracker update (step~D of Algorithm~\ref{alg:disgrem}) can also be
+	performed every $K_{\mathrm{lazy}}$-th iteration instead of every iteration,
+	reusing the previous Hessian for $K_{\mathrm{lazy}}{-}1$ consecutive steps.
+	This reduces communication (no Hessian payload in skipped rounds) at the cost
+	of stale curvature information.
+	Section~\ref{ssec:commexp} studies the trade-off and recommends
+	$K_{\mathrm{lazy}}\in\{5,10\}$ for slowly varying problems.
+	
+	Section~\ref{sec:experiments} tests these guidelines and all four
+	variants empirically, with convergence benchmarks on nine test functions
+	(Section~\ref{ssec:convergence}), a communication-cost ablation study
+	of compression and lazy Hessian updates (Section~\ref{ssec:commexp}),
+	and an adaptive-mechanism study quantifying the robustness of
+	\textsc{AdaDisGrem} to the initial $M$ (Section~\ref{ssec:ada}).
 	
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	
 \section{Convergence analysis}\label{sec:theory}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-Throughout this section we assume Assumption~\ref{ass:standing},
-the parameter requirement $M\ge L_2$, and that
-Algorithm~\ref{alg:disgrem} is run with the initialization
-$g_{i,0}=\nabla f_i(x_{i,0})$, $H_{i,0}=\nabla^2 f_i(x_{i,0})$.
+Throughout this section we assume Assumption~\ref{ass:standing}
+and the parameter requirement $M\ge L_2$.
 Complete proofs are collected in Appendix~\ref{app:proofs}, and the
 dispersion-decay and burn-in construction is detailed in
 Appendix~\ref{app:dispersion}.
@@ -720,23 +711,25 @@ average iterate satisfies an inexact Newton residual bound,
 from which a $3/2$-recursion on the
 optimality gap (\S\ref{ssec:descent}) yields the $\cO(\varepsilon^{-1})$ rate.
 
-In summary, the logical dependency chain is:
-averaging identities $\to$ reference step $\to$ stabilizer/dispersion bounds
-$\to$ inexact Newton condition (Proposition~\ref{prop:inexact-rn})
-$\to$ $3/2$-recursion (Lemma~\ref{lem:solve32})
-$\to$ global complexity (Theorem~\ref{thm:main}).
-Appendix~\ref{app:dispersion} supplies the burn-in index~$K_0(\varepsilon)$.
-
-The proof combines two independent stages (detailed in
-Remark~\ref{rem:two_stages} after the main theorem).
-The reader interested only in the final result may skip directly to
-Theorem~\ref{thm:main} (p.~\pageref{thm:main}).
+The overall proof combines two independent stages, as detailed
+in Remark~\ref{rem:two_stages} below.
+Stage~1 (Appendix~\ref{app:dispersion}) shows that tracker
+dispersions decay polynomially under the logarithmic schedule,
+using only iterate boundedness (Lemma~\ref{lem:lyap_bound}).
+Stage~2 (this section) verifies the per-iteration chain
+once dispersions are small, yielding the post-burn-in
+$\cO(\varepsilon^{-1})$ rate.
+The two stages are self-contained with no circular dependencies.
+The reader interested only in the final result may skip to
+Theorem~\ref{thm:main} (p.~\pageref{thm:main}) and the subsequent
+discussion of strong convexity and fixed mixing depth.
 
 \subsection{Iterate boundedness and local constants}\label{ssec:iterate_bound}
 
 	\begin{lemma}\label{lem:lyap_bound}
-		Assume Assumption~\ref{ass:standing}(1)--(3).
-		Let $x_\star\in\arg\min f$ and define
+		Assume Assumption~\ref{ass:standing}(1)--(3) (convexity, connected network, coercivity).
+		By coercivity (Assumption~\ref{ass:standing}(3)), the minimizer set is non-empty;
+		let $x_\star\in\arg\min f$ and define
 		$\Phi_0:=f(\bar x_0)-f_\star$, where $\bar x_0:=\frac1N\sum_{i=1}^N x_{i,0}$.
 		Consider the generalized Lyapunov function
 		\[
@@ -796,15 +789,15 @@ Theorem~\ref{thm:main} (p.~\pageref{thm:main}).
 
 	\begin{remark}
 		Prior decentralized second-order analyses
-		\citep{mokhtari2016esom,sun2022sonata,maritan2023networkgiant} posit a bounded
-		static heterogeneity constant
+		\citep{mokhtari2016esom,sun2022sonata,ye2023networkgiant} posit a bounded
+		\emph{static} heterogeneity constant
 		$\sigma_H:=\sup_{\|x-x_\star\|\le D}
 		  \frac{1}{\sqrt N}\|(\Pmat\otimes I_{d^2})\mathcal H(\one\otimes x)\|$.
 		We avoid this entirely: Hessian-tracker dispersion is controlled
 		by an increment-based recursion
 		(Appendix~\ref{app:dispersion}, Lemma~\ref{lem:DH_rec})
 		that tracks mismatch through Lipschitz-continuous
-		differences $\nabla^2 F(X_{k+1})-\nabla^2 F(X_k)$,
+		\emph{differences} $\nabla^2 F(X_{k+1})-\nabla^2 F(X_k)$,
 		so no accuracy floor linked to~$\sigma_H$ appears in the
 		final bounds.
 	\end{remark}
@@ -842,7 +835,7 @@ Then for all $k\ge0$,
 \]
 \end{lemma}
 \begin{proof}
-By induction using $W\one=\one$ and the telescoping form of the tracker update (step~(D)).
+By induction using $W\one=\one$ and the telescoping form of the tracker update (step~D).
 \end{proof}
 
 \begin{lemma}\label{lem:avg-track-h}
@@ -860,7 +853,7 @@ Identical argument to Lemma~\ref{lem:avg-track-g}, applied to the Hessian tracke
 
 \subsection{Well-posed local solves and a reference step}\label{ssec:refstep}
 With the averaging identities in hand, we next introduce the
-reference step $s_k^{\mathrm{ref}}$: the Newton step that a
+\emph{reference step} $s_k^{\mathrm{ref}}$: the Newton step that a
 centralized agent would compute using the averaged Hessian and gradient.
 The gap $\|\bar s_k - s_k^{\mathrm{ref}}\|$ then quantifies how much the
 decentralized updates deviate from this ideal step.
@@ -901,14 +894,14 @@ L_2\|\bar s_k\|\le \frac1N\sum_{i=1}^N \lambda_{i,k}\le \tilde{\bar\lambda}_k.
 \end{lemma}
 
 \subsection{Bridge bounds: tracked averages versus true quantities}\label{ssec:bridge}
-The reference step uses the tracked averages
+The reference step employs the tracked averages
 $\tilde{\bar g}_k,\tilde{\bar H}_k$ rather than the true gradient
 $g_k:=\nabla f(\bar x_k)$ and true Hessian
 $\nabla^2 f(\bar x_k)$.
 By Lemma~\ref{lem:avg-track-g},
 $\tilde{\bar g}_k = \frac{1}{N}\sum_{i}\nabla f_i(x_{i,k})$,
-which coincides with $\nabla f(\bar x_k)$ only at exact
-consensus ($x_{i,k}=\bar x_k$ for all~$i$).
+which coincides with $\nabla f(\bar x_k)$ \emph{only at exact
+consensus} ($x_{i,k}=\bar x_k$ for all~$i$).
 Away from consensus the discrepancy is controlled by the
 bridge lemmas below, which quantify it in terms of the
 post-mixing spatial disagreement $D(X_k)$.
@@ -988,11 +981,13 @@ For every $k$ with $\underline\lambda_k>0$,
 \end{lemma}
 
 \begin{lemma}\label{lem:lambda_dispersion}
-Assume $\tilde{\bar g}_k\neq 0$ and the relative gradient dispersion condition
+Assume $\tilde{\bar g}_k\neq 0$ and the \emph{relative gradient dispersion} condition
 \begin{equation}\label{eq:rel_grad_disp}
 \max_{1\le i\le N}\|\tilde g_{i,k}-\tilde{\bar g}_k\|\le \alpha_d\|\tilde{\bar g}_k\|
-\qquad\text{for some }\alpha_d\in(0,1).
+\qquad\text{for some }\alpha_d\in(0,1)
 \end{equation}
+(this condition is verified for all $k\ge K_0(\varepsilon)$ by the
+burn-in analysis in Proposition~\ref{prop:burnin}).
 Then
 \begin{equation}\label{eq:lambda_disp_bound}
 \Delta_k^\lambda
@@ -1007,7 +1002,7 @@ Then
 % ============================================================
 Collecting the bridge, stabilizer, and step-dispersion bounds, we
 verify that the average iterate $\bar x_k$ satisfies a standard
-inexact regularized Newton condition once the burn-in phase
+\emph{inexact regularized Newton} condition once the burn-in phase
 is complete, that is, for $k\ge K_0(\varepsilon)$, where $K_0$ is the
 burn-in index from Proposition~\ref{prop:burnin}.
 This is the key step, as it permits invoking the one-step descent
@@ -1077,19 +1072,11 @@ Under the conditions of Lemma~\ref{lem:descent},
 \]
 \end{lemma}
 
-We partition the iteration indices into \emph{steady} iterations
-(where the gradient norm does not drop sharply) and
-\emph{super-descent} iterations (where it drops by at least a factor of 4):
+Define
 \begin{gather*}
 \mathcal I:=\{k\ge0:\ \|g_{k+1}\|\ge \tfrac14\|g_k\|\},\\
 \mathcal S:=\{k\ge0:\ \|g_{k+1}\|< \tfrac14\|g_k\|\}.
 \end{gather*}
-
-The following lemma establishes a sharp decrease in the optimality gap
-during steady-descent iterations.
-The auxiliary requirement $\lambda_k\le C_\lambda\sqrt{\|g_k\|}$ is
-rigorously verified in Appendix~\ref{app:proofs}
-(Lemma~\ref{lem:lambda_scaling}).
 
 \begin{lemma}\label{lem:steady}
 Assume Proposition~\ref{prop:inexact-rn} holds for all $k$ with some $\eta\le 1/12$.
@@ -1097,20 +1084,24 @@ Assume additionally that there exists $C_\lambda>0$ such that
 \[
 \lambda_k\le C_\lambda\sqrt{\|g_k\|}\qquad\text{for all $k$ with $g_k\neq 0$}.
 \]
-Then there exists $\nu>0$ such that for all $k\in\mathcal I$,
+(This condition is ensured by Lemma~\ref{lem:lambda_scaling}
+in Appendix~\ref{app:proofs} under
+schedule~\eqref{eq:log_schedule_main}, together with the burn-in
+analysis of Proposition~\ref{prop:burnin}.)
+Then there exists $\tau>0$ such that for all $k\in\mathcal I$,
 \[
-\Phi_k-\Phi_{k+1}\ge \nu\,\Phi_k^{3/2}.
+\Phi_k-\Phi_{k+1}\ge \tau\,\Phi_k^{3/2}.
 \]
 \end{lemma}
 
 \begin{lemma}\label{lem:solve32}
-If $\Phi_{k+1}\le \Phi_k-\nu\Phi_k^{3/2}$ for some $\nu>0$ and all $k$, then
+If $\Phi_{k+1}\le \Phi_k-\tau\Phi_k^{3/2}$ for some $\tau>0$ and all $k$, then
 \[
-\Phi_k\le \frac{4}{\nu^2(k+2)^2}.
+\Phi_k\le \frac{4}{\tau^2(k+2)^2}.
 \]
 \end{lemma}
 
-Throughout we use the logarithmic mixing schedule
+Throughout we use the \emph{logarithmic mixing schedule}
 \begin{equation}\label{eq:log_schedule_main}
   \tau_k \;=\; t_k \;=\; \Bigl\lceil \frac{p\,\log(k+2)}{-\log\rho} \Bigr\rceil,
   \qquad k\ge 0,
@@ -1150,6 +1141,14 @@ the post-burn-in phase requires at most $\cO(\varepsilon^{-1})$ iterations,
 matching the centralized regularized Newton complexity of \citet{mishchenko2023rn},
 and under the schedule~\eqref{eq:log_schedule_main} the total number of neighbor communication rounds is
 $\cO\big((K_0(\varepsilon)+\varepsilon^{-1})\log(K_0(\varepsilon)+\varepsilon^{-1})\big)$.
+The burn-in $K_0(\varepsilon)$ is the smallest index at which
+polynomial-decaying tracker dispersions
+(Proposition~\ref{prop:dispersion_decay}) become small enough to satisfy the
+inexact regularized Newton condition (Proposition~\ref{prop:inexact-rn}).
+Since the dispersions decay as $\cO(k^{-(p-1)})$, inverting the decay gives
+$K_0(\varepsilon)=\cO\!\bigl(\varepsilon^{-1/(2(p-1))}\bigr)$,
+which is $o(\varepsilon^{-1})$ for $p>2$; the total complexity is therefore
+dominated by the post-burn-in $\cO(\varepsilon^{-1})$ term.
 \end{theorem}
 
 \begin{remark}\label{rem:burnin_order}
@@ -1173,9 +1172,9 @@ communication rounds, since $-1/\log\rho\approx(1-\rho)^{-1}$ for
 $\rho$ near~1.
 The total communication-round budget is therefore
 \[
-\cO\bigl((1-\rho)^{-1}\,\varepsilon^{-1}\log(1/\varepsilon)\bigr),
+\cO\bigl((1-\rho)^{-1}\,\varepsilon^{-1}\log^2(1/\varepsilon)\bigr),
 \]
-exhibiting a linear penalty in $(1-\rho)^{-1}$---the same
+exhibiting a \emph{linear} penalty in $(1-\rho)^{-1}$---the same
 order as first-order gradient-tracking methods
 \citep{nedic2017diging}.
 On very sparse graphs ($\rho\to 1$), the per-iteration communication
@@ -1184,8 +1183,8 @@ overhead grows, but the iteration count remains network-independent.
 
 \begin{remark}\label{rem:two_stages}
 The proof of Theorem~\ref{thm:main} combines two independent
-analyses, distinct from the per-iteration reduction chain in
-Sections~\ref{ssec:avg}--\ref{ssec:descent} (which is used in Stage~2).
+analyses, distinct from the per-iteration reduction chain described above
+(which is used in Stage~2).
 In Stage~1 (dispersion decay;
 Proposition~\ref{prop:dispersion_decay},
 Appendix~\ref{app:dispersion}), the logarithmic schedule
@@ -1198,7 +1197,7 @@ verifies an inexact regularized Newton recursion
 (Proposition~\ref{prop:inexact-rn}), and the $3/2$-recursion
 (Lemma~\ref{lem:solve32}) gives $\cO(\varepsilon^{-1})$ further
 iterations.
-The two stages are self-contained and do not depend on each other's conclusions.
+The two stages are self-contained; there is no circularity.
 \end{remark}
 
 \subsection{Strong convexity and local superlinear convergence}\label{ssec:superlinear}
@@ -1237,7 +1236,8 @@ Then, for all sufficiently large $k$,
 
 \begin{theorem}\label{thm:superlinear}
 Assume Assumptions~\ref{ass:standing} and~\ref{ass:strong}.
-Assume that Proposition~\ref{prop:inexact-rn} holds for all sufficiently large $k$ with some $\eta\in(0,1/12]$,
+Assume that Proposition~\ref{prop:inexact-rn} holds for all sufficiently large $k$ with some $\eta\in(0,1/12]$
+(guaranteed by Theorem~\ref{thm:main} for $k\ge K_0(\varepsilon)$),
 and that the mixing depth $\tau_k$ is chosen so that \eqref{eq:delta_schedule} holds with some $\gamma>0$.
 Then there exist constants $C_{\mathrm{sc}}>0$ and $k_{\mathrm{sc}}$ such that for all $k\ge k_{\mathrm{sc}}$,
 \[
@@ -1289,7 +1289,8 @@ for every $\varepsilon>\varepsilon_{\mathrm{nbhd}}$, the iterate reaches
 $\|\nabla f(\bar x_k)\|\le \varepsilon$ in $\cO(\varepsilon^{-1})$ iterations.
 When $\varepsilon_{\mathrm{nbhd}}\ll\varepsilon$,
 or equivalently when $N_c\gg \log(1/\varepsilon)/\log(1/\rho)$,
-the fixed-$N_c$ regime becomes practically indistinguishable, at the target precision $\varepsilon$, from the exact-convergence regime.
+the fixed-$N_c$ regime is indistinguishable from the exact-convergence regime
+for all practical purposes.
 \end{corollary}
 
 \begin{proof}
@@ -1329,7 +1330,7 @@ so the neighborhood is invisible at the target precision.
 \end{proof}
 
 \begin{remark}\label{rem:liminf_form}
-The $\liminf$ form in Corollary~\ref{cor:fixed_nc} guarantees infinitely many visits to
+The $\liminf$ form above guarantees infinitely many visits to
 the $\varepsilon_{\mathrm{nbhd}}$-ball; an equivalent statement is
 $\min_{0\le j\le k}\|\nabla f(\bar x_j)\|
 =\cO(\max(\varepsilon_{\mathrm{nbhd}}, k^{-1}))$,
@@ -1339,11 +1340,11 @@ the form commonly reported in nonconvex complexity analyses.
 \begin{remark}\label{rem:practical_implications}
 With $\rho\approx 0.92$ and $N_c=3$ the worst-case bound gives
 $\epsilon_{\mathrm{mix}}=\rho^3\approx 0.78$, yet fixed $N_c{=}3$
-reaches $\mathrm{relF}\lesssim 10^{-10}$ on seven of the nine benchmarks
+reaches relF~$\lesssim 10^{-10}$ on seven of the nine benchmarks
 (Section~\ref{sec:experiments}).
 The gap arises because Corollary~\ref{cor:fixed_nc} replaces the
 per-iteration driving term $L_1\|X_{k+1}{-}X_k\|$ in the
-dispersion recursion (Lemma~\ref{lem:DG_rec}) with a uniform
+dispersion recursion (Lemma~\ref{lem:DG_rec}) with a \emph{uniform}
 upper bound, whereas in practice
 $\|X_{k+1}{-}X_k\|\to 0$ as stationarity is approached, so the
 effective contraction is much tighter than~$\rho^{2N_c}$.
@@ -1369,37 +1370,25 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	This section evaluates the practical performance of the
 	\textsc{DisGrem} family in the fixed-mixing-depth regime
 	(Corollary~\ref{cor:fixed_nc}).
-	All experiments fix the per-stage gossip depth at $N_c=3$ and
-	report statistics over 20 independent Monte~Carlo (MC) trials with
+	All experiments use $N_c=3$ gossip rounds per outer iteration and
+	report statistics over 20 independent Monte~Carlo trials with
 	randomized starting points and random Erd\H{o}s--R\'{e}nyi graphs.
 	Four \textsc{DisGrem} variants are compared against six first- and
 	second-order baselines on nine objectives spanning well-conditioned
 	and ill-conditioned convex problems, real-data logistic regression,
-	and four nonconvex objectives.
+	and four nonconvex landscapes.
 	
 	% ─────────────────────────────────────────────────────────────────────
 	\subsection{Experimental setup}\label{ssec:setup}
 	% ─────────────────────────────────────────────────────────────────────
 	
-	We use $N{=}10$ agents communicating over an Erd\H{o}s--R\'{e}nyi (ER) random graph
-	with edge probability $p_{\mathrm{er}}{=}0.5$ (regenerated per trial).
+	We use $N{=}10$ agents communicating over an ER random graph
+	with edge probability $p{=}0.5$ (regenerated per trial).
 	The Metropolis--Hastings doubly stochastic mixing matrix $W$ yields
 	spectral gap $1{-}\rho\approx 0.08$
 	($\rho\approx 0.92$; typical range $\rho\in[0.88,0.96]$ across 20 trials),
 	representing a moderately sparse topology.
-	For the \textsc{DisGrem} family, $\tau_k{=}t_k{=}N_c{=}3$,
-	so each outer iteration involves $\tau_k{+}2t_k=9$ gossip rounds
-	(Section~\ref{ssec:comm}).
-	With $d{=}30$, average degree $|\mathcal N_i|\approx 4.5$, and $n_v=2$
-	payload vectors, the per-agent send volume from~\eqref{eq:comm_cost_iter} is
-	\[
-	C_{\mathrm{iter}}^{\mathrm{send}}\!\approx\!
-	9\!\times\! 4.5\!\times\!(60\!+\!465)\!\times\! 8
-	\!\approx\! 170\,\text{kB/agent/iter},
-	\]
-	consistent with the magnitudes reported in Table~\ref{tab:summary}.
-	All baselines likewise perform $N_c{=}3$ rounds of consensus
-	mixing per outer iteration.
+	All algorithms perform $N_c{=}3$ consensus rounds per outer iteration.
 	
 	We compare ten methods in three groups.
 	The proposed \textsc{DisGrem} family comprises four variants:
@@ -1413,8 +1402,10 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	per-function $M_{\mathrm{fac}}$ values are listed in Table~\ref{tab:config}.
 	The theoretical condition $M\ge L_2$ is not explicitly
 	enforced by the heuristic default $M=M_{\mathrm{fac}}\cdot H_{\max}^0$;
-	the adaptive variant \textsc{AdaDisGrem} addresses this through
-	online secant-based estimation (Section~\ref{ssec:ada}).
+	the adaptive variant \textsc{AdaDisGrem} addresses this gap through
+	online secant-based estimation.
+	The fixed-$M$ results should therefore be viewed as demonstrating
+	empirical robustness beyond the strict theoretical regime.
 	
 	Two first-order baselines are included:
 	EXTRA~\citep{shi2015extra} and
@@ -1423,7 +1414,7 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	DQM~\citep{eisen2017dqn},
 	ESOM~\citep{mokhtari2016esom},
 	SONATA~\citep{sun2022sonata}, and
-	Network-GIANT~\citep{maritan2023networkgiant}.
+	Network-GIANT~\citep{ye2023networkgiant}.
 	First-order baselines use a Lipschitz-scaled stepsize
 	$\alpha=\alpha_{\mathrm{base}}/H_{\max}^{0}$;
 	for each function, $\alpha_{\mathrm{base}}$ is selected from
@@ -1433,52 +1424,31 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	Second-order baselines (DQM, ESOM, SONATA, Network-GIANT) use their
 	published default parameters; SONATA and Network-GIANT solve local
 	subproblems to machine precision via a direct solver.
-	All baselines use $N_c{=}3$ consensus rounds per outer iteration.
-	Because the \textsc{DisGrem} family has a three-stage gossip
-	structure ($\tau_k{+}2t_k=9$ rounds per iteration, each carrying
-	Hessian payloads), its per-iteration byte cost exceeds that of
-	single-stage baselines; cross-method fairness is therefore assessed
-	through the cumulative communication cost (MB) reported in
-	Figure~\ref{fig:profiles_comm}.
-	Our tuning philosophy is \emph{light, problem-class-level defaults}:
-	the per-function $M_{\mathrm{fac}}$ for the proposed family and the
-	per-function $\alpha_{\mathrm{base}}$ for first-order baselines are
-	both selected from small discrete grids via a handful of preliminary
-	runs, while second-order baselines retain their published defaults.
-	A sensitivity analysis (Appendix~\ref{app:supp_exp}, Figure~\ref{fig:sweep_second})
-	confirms that exhaustive tuning of the second-order baselines' hyperparameters does not resolve
-	their stagnation on hard instances like \textsc{LogSumExp}.
+	All baselines use the same $N_c{=}3$ consensus rounds per outer
+	iteration as the \textsc{DisGrem} family.
 	Code to reproduce all experiments will be made publicly available
 	upon acceptance.
 	
-	We test on nine objective functions
-	(Table~\ref{tab:functions});
-	all synthetic functions use $d{=}30$, while the two logistic regression
-	problems inherit $d{=}22$ from the \textsc{svmguide3} dataset.
-	See Table~\ref{tab:config} for per-function algorithmic parameters.
+	We test on nine objective functions.
+	All synthetic functions use $d{=}30$; the two logistic regression problems
+	inherit $d{=}22$ from the \textsc{svmguide3} dataset.
+	See Table~\ref{tab:config} for full parameter specifications.
 	Five objectives are convex:
-	(i)~\textsc{Ridge} ($\ell_2$-regularized least squares, $\lambda{=}10^{-3}$);
-	(ii)~\textsc{QuadBad} (heterogeneous ill-conditioned quadratic, $\kappa{=}10^3$);
-	(iii)~\textsc{LogSumExp}
-	(smooth approximation of the max function~\citep{nesterov2005smooth},
-	$\rho{=}0.5$);
-	(iv)~\textsc{Huber}
-	(pseudo-Huber loss~\citep{charbonnier1997huber}, $\delta{=}1$);
+	(i)~\textsc{Ridge} ($\ell_2$-regularized quadratic, $\lambda{=}10^{-3}$);
+	(ii)~\textsc{QuadBad} (ill-conditioned quadratic, $\kappa{=}10^3$);
+	(iii)~\textsc{LogSumExp};
+	(iv)~\textsc{Huber} (smooth pseudo-Huber loss, $\delta{=}1$);
 	(v)~\textsc{LogReg-real} ($\ell_2$-regularized logistic regression on the
-	\textsc{svmguide3} LibSVM dataset~\citep{chang2011libsvm},
-	$m{=}1243$, $d{=}22$;
-	a standard benchmark in decentralized
-	optimization~\citep{shi2015extra,sun2022sonata}).
+	\textsc{svmguide3} LibSVM dataset~\citep{chang2011libsvm}, $m{=}1243$, $d{=}22$).
 	The remaining four objectives are nonconvex, not covered by the theory but included
-	to test algorithmic robustness beyond the convex regime:
-	(vi)~\textsc{LinLog} (piecewise quadratic-logarithmic loss with flat curvature regions);
-	(vii)~\textsc{Rosenbrock}~\citep{rosenbrock1960automatic};
-	(viii)~\textsc{Styblinski--Tang}~\citep{styblinski1990experiments} (multimodal);
-	(ix)~\textsc{LogReg-NCVR} (logistic regression with
-	bounded nonconvex penalty $\alpha\sum_k x_k^2/(1{+}x_k^2)$~\citep{geman1995nonlinear}
-	on \textsc{svmguide3}).
+	to probe algorithmic robustness beyond the convex regime:
+	(vi)~\textsc{LinLog} ($\sum\ln(1{+}|r_i|)$, with flat curvature regions);
+	(vii)~\textsc{Rosenbrock};
+	(viii)~\textsc{Styblinski--Tang} (multimodal);
+	(ix)~\textsc{LogReg-NCVR} (nonconvex regularized logistic regression on
+	\textsc{svmguide3}).
 	On nonconvex objectives the eigenvalue-shift stabilizer $\delta_{i,k}$
-	ensures the local linear system remains symmetric positive definite (SPD), so the algorithm operates
+	ensures the local linear system remains SPD, so the algorithm operates
 	as a damped Newton-like method; however, the convergence
 	guarantees of Theorems~\ref{thm:main}--\ref{thm:superlinear} do
 	not apply.
@@ -1493,84 +1463,8 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	whose existence is guaranteed by coercivity).
 	For nonconvex objectives, $f_{\mathrm{ref}}$ denotes the best value
 	found by multi-start L-BFGS-B (50 restarts, tolerance $10^{-15}$);
-	it is not a certified global optimum.
+	it is \emph{not} a certified global optimum.
 	
-	\begin{table}[htbp]
-		\centering
-		\caption{Test function definitions.
-			Each $f_i\colon\R^d\to\R$ is the local objective of agent~$i$.
-			For synthetic problems (Ridge--LinLog), data $(A_i, b_i)$
-			are independently generated per agent with i.i.d.\ Gaussian entries;
-			for logistic regression, the \textsc{svmguide3}
-			dataset~\citep{chang2011libsvm}
-			($m{=}1243$, $d{=}22$) is randomly partitioned across agents.
-			Rosenbrock and Styblinski--Tang are homogeneous
-			(all agents share the same $f_i$).}
-		\label{tab:functions}
-		\setlength{\tabcolsep}{3pt}
-		\footnotesize
-		\begin{tabular}{@{}llp{4.5cm}@{}}
-			\toprule
-			Name & Local objective $f_i(x)$ & Data / parameters \\
-			\midrule
-			\multicolumn{3}{@{}l}{\textit{Convex}} \\[2pt]
-			Ridge
-			& $\frac{1}{2}\|A_i x{-}y_i\|^2{+}\frac{\lambda}{2}\|x\|^2$
-			& $A_i{\in}\R^{150\times d}$,
-			  $y_i{=}A_i x_{\mathrm{true}}{+}0.05\epsilon_i$,
-			  $\lambda{=}10^{-3}$ \\[4pt]
-			QuadBad
-			& $\frac{1}{2}x^\top Q_i x + b_i^\top x$
-			& $Q_i$ diagonal, eigenvalues log-spaced
-			  in $[1,\chi_i]$,
-			  $\chi_i{\approx}\kappa$;
-			  $b_i{\sim}\mathcal{N}(0,I)$ \\[4pt]
-			LogSumExp
-			& $\rho\log\!\bigl(\sum_{j=1}^{p}
-			  e^{(A_i^\top x-b_i)_j/\rho}\bigr)$
-			& $A_i{\in}\R^{d\times p}$,
-			  $p{=}\max(d{+}2,12)$,
-			  $\rho{=}0.5$ \\[4pt]
-			Huber
-			& $\sum_{j=1}^{p}\delta^2
-			  \bigl(\sqrt{1{+}(r_j/\delta)^2}{-}1\bigr)$,
-			  $r{=}A_ix{-}b_i$
-			& $A_i{\in}\R^{5\times d}$,
-			  $\delta{=}1$ \\[4pt]
-			LogReg-real
-			& $\frac{\iota}{2}\|x\|^2
-			  {+}\frac{1}{m_i}\sum_j
-			  \log(1{+}e^{-b_j a_j^\top x})$
-			& \textsc{svmguide3} data split;
-			  $\iota{=}10^{-3}$ \\[4pt]
-			\midrule
-			\multicolumn{3}{@{}l}{\textit{Nonconvex}} \\[2pt]
-			LinLog
-			& $\sum_j\ell\bigl((A_ix{-}b_i)_j\bigr)$;
-			  see ${}^\dagger$ below
-			& $A_i{\in}\R^{d\times d}$ \\[4pt]
-			Rosenbrock
-			& $\sum_{j=1}^{d/2}\bigl[100(x_{2j}
-			  {-}x_{2j-1}^2)^2{+}(x_{2j-1}{-}1)^2\bigr]$
-			& shared ($f_i{=}f$\;\;$\forall\,i$) \\[4pt]
-			Styblinski
-			& $\sum_{j=1}^{d}
-			  (x_j^4{-}16x_j^2{+}5x_j)$
-			& shared ($f_i{=}f$\;\;$\forall\,i$) \\[4pt]
-			LogReg-NCVR
-			& $\frac{1}{m_i}\sum_j
-			  \log(1{+}e^{-b_ja_j^\top x})
-			  {+}\alpha\sum_k\frac{x_k^2}{1{+}x_k^2}$
-			& \textsc{svmguide3} data split;
-			  $\alpha{=}0.05$ \\
-			\bottomrule
-		\end{tabular}
-		\\[4pt]
-		{\footnotesize ${}^\dagger$LinLog:
-		$\ell(r)=r^2/2$ for $|r|\le 1$;\;
-		$\ell(r)=\ln|r|+\tfrac{1}{2}$ for $|r|>1$.}
-	\end{table}
-
 	\begin{table}[htbp]
 		\centering
 		\caption{Per-function experimental configuration.
@@ -1593,8 +1487,8 @@ logarithmic schedule primarily as a device for theoretical analysis.
 			LogSumExp   & 5.0  & 0.30 &  400 & No  & \\
 			Huber       & 1.5  & 0.30 &  800 & No  & Pseudo-Huber, $\delta{=}1$ \\
 			LogReg-real & 3.0  & 1.00 &  600 & No  & svmguide3, $d{=}22$ \\
-		LinLog      & 1.0  & 0.20 & 1500 & No  & Nonconvex \\
-		Rosenbrock  & 3.0  & 0.10 &  300 & Yes & Nonconvex \\
+			LinLog      & 1.0  & 0.20 & 1500 & No  & Non-convex \\
+			Rosenbrock  & 3.0  & 0.10 &  300 & Yes & Non-convex \\
 			Styblinski  & 15.0 & 0.05 &  100 & Yes & Multimodal \\
 			LogReg-NCVR & 3.0  & 1.00 & 1000 & Yes & svmguide3, $d{=}22$ \\
 			\bottomrule
@@ -1625,16 +1519,24 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	(a)~$\mathrm{combo}=\min_k\,\mathrm{combo}_k$;
 	(b)~$\mathrm{relF}=\min_k |f(\bar x_k)-f_{\mathrm{ref}}|/|f(\bar x_0)-f_{\mathrm{ref}}|$;
 	(c)~wall-clock time (seconds; for reference only---all implementations
-	use Python/NumPy with comparable vectorization);
+	use Python/NumPy with comparable vectorization, but we did not
+	optimize any method's code to the same degree);
 	(d)~cumulative communication cost (MB), defined as the total
 	send\,+\,receive volume per agent, summed over all outer iterations and all
 	neighbors (consistent with the per-iteration estimate in Section~\ref{ssec:comm}).
 	All convergence curves show the 20-run mean with $\pm1$ standard
 	deviation shading.
 	Analytical gradients and Hessians are used for all functions.
+	Because \textsc{DisGrem} transmits $\cO(d^2)$ Hessian data per
+	iteration while first-order methods transmit $\cO(d)$ vectors,
+	a direct per-iteration communication comparison would be
+	unfair.
+	We therefore compare total communication volume to reach
+	a given precision $\epsilon$ (the performance-profile threshold),
+	which is the relevant metric in communication-limited settings.
 	A run is deemed successful at threshold $\epsilon$ if it reaches
 	$\mathrm{relF}\le\epsilon$ within $K_{\max}$ iterations without
-	encountering NaN or overflow; for nonconvex problems, $\mathrm{relF}$ is
+	encountering NaN or overflow; for nonconvex problems, relF is
 	computed relative to $f_{\mathrm{ref}}$.
 	Unless otherwise noted, the Hessian is updated every iteration
 	($K_{\mathrm{lazy}}{=}1$); Section~\ref{ssec:commexp} studies the
@@ -1649,6 +1551,12 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	% ─────────────────────────────────────────────────────────────────────
 	\subsection{Convergence benchmarks}\label{ssec:convergence}
 	% ─────────────────────────────────────────────────────────────────────
+	
+	We first present overall solver profiles (Figures~\ref{fig:profiles}--\ref{fig:profiles_comm}),
+	then a summary table and representative convergence curves
+	(Table~\ref{tab:summary}, Figure~\ref{fig:relF_steps_repr}).
+	Full per-problem curves for all nine functions are provided in
+	Appendix~\ref{app:supp_exp}.
 	
 	%% --- Performance and data profiles (promoted to first position) ---
 	
@@ -1673,16 +1581,8 @@ logarithmic schedule primarily as a device for theoretical analysis.
 			Bottom: data profiles with communication cost on the $\kappa$-axis.}
 		\label{fig:profiles_comm}
 	\end{figure}
-	The main empirical finding is that the \textsc{DisGrem} family is the
-	most consistent solver across the full benchmark suite:
-	it is the only family that reliably attains high accuracy on all nine
-	test problems, whereas every baseline either stagnates, diverges, or
-	exhibits strong problem dependence on at least one instance
-	(Figures~\ref{fig:profiles}--\ref{fig:profiles_comm}).
-
 	Table~\ref{tab:summary} reports key numerical results on four
-	representative functions covering both favorable and challenging
-	cases; per-problem details follow.
+	representative functions.
 	
 	\begin{table}[htbp]
 		\centering
@@ -1706,100 +1606,84 @@ logarithmic schedule primarily as a device for theoretical analysis.
 				& Time & $K$ & min(relF) & MB \\
 				\midrule
 				\multicolumn{17}{l}{Proposed (\textsc{DisGrem} family)} \\
-		\textsc{DisGrem}      & 1.4 & 800 & $9\mathrm{e}^{-6}$  & 242
-		& 0.8 & 400 & $4\mathrm{e}^{-10}$ & 121
-		& 3.1 & 1500 & $2\mathrm{e}^{-6}$  & 444
-		& 0.07 & 94  & $1\mathrm{e}^{-15}$ & 30 \\
-		\textsc{CeDisGrem}    & 1.3 & 800 & $1\mathrm{e}^{-6}$  & 239
-		& 0.8 & 400 & $3\mathrm{e}^{-11}$ & 120
-		& 2.9 & 1500 & $4\mathrm{e}^{-6}$  & 449
-		& 0.05 & 93  & $5\mathrm{e}^{-16}$ & 28 \\
-		\textsc{AdaDisGrem}   & 1.5 & 800 & $3\mathrm{e}^{-6}$  & 242
-		& 0.9 & 400 & $3\mathrm{e}^{-6}$  & 121
-		& 3.3 & 1500 & $9\mathrm{e}^{-7}$  & 444
-		& 0.01 & 17  & $6\mathrm{e}^{-16}$ & 6 \\
-		\textsc{CeAdaDisGrem} & 1.4 & 800 & $3\mathrm{e}^{-6}$  & 239
-		& 0.8 & 400 & $5\mathrm{e}^{-7}$  & 120
-		& 3.2 & 1500 & $2\mathrm{e}^{-6}$  & 446
-		& 0.02 & 33  & $2\mathrm{e}^{-13}$ & 10 \\
-			\midrule
-			\multicolumn{17}{l}{First-order baselines} \\
-			EXTRA  & 8.2 & 800 & $6\mathrm{e}^{-3}$  & 8
-			& 4.0 & 400 & $4\mathrm{e}^{-1}$  & 4
-			& 21.7 & 1500 & $1\mathrm{e}^{-8}$  & 15
-			& 0.56 & 100 & $8\mathrm{e}^{-1}$  & 1 \\
-			DIGing & 7.4 & 800 & $3\mathrm{e}^{-4}$  & 24
-			& 3.8 & 400 & $2\mathrm{e}^{-1}$  & 12
-			& 10.9 & 989 & $1\mathrm{e}^{-12}$ & 31
-			& 0.60 & 100 & $9\mathrm{e}^{-1}$  & 3 \\
-			\midrule
-			\multicolumn{17}{l}{Second-order baselines} \\
-			DQM    & 0.9 & 800 & $3\mathrm{e}^{-1}$  & 12
-			& 0.5 & 400 & $3\mathrm{e}^{-3}$  & 6
-			& 2.1 & 1500 & $2\mathrm{e}^{0}$   & 23
-			& 0.08 & 100 & $2\mathrm{e}^{2}$   & 2 \\
-			ESOM   & 1.7 & 800 & $3\mathrm{e}^{-1}$  & 73
-			& 1.0 & 400 & $3\mathrm{e}^{-3}$  & 37
-			& 3.5 & 1500 & $1\mathrm{e}^{1}$   & 139
-			& 0.15 & 100 & $3\mathrm{e}^{12}$  & 9 \\
-			SONATA & 1.0 & 800 & $2\mathrm{e}^{-1}$  & 37
-			& 0.6 & 400 & $4\mathrm{e}^{-2}$  & 18
-			& 2.3 & 1500 & $1\mathrm{e}^{0}$   & 69
-			& 0.03 & 12  & $5\mathrm{e}^{-16}$ & 1 \\
-			Net-GIANT & 1.0 & 800 & $5\mathrm{e}^{-2}$ & 37
-			& 0.7 & 400 & $2\mathrm{e}^{-2}$  & 18
-			& 2.5 & 1500 & $1\mathrm{e}^{0}$   & 69
-			& 0.01 & 12  & $5\mathrm{e}^{-16}$ & 1 \\
+			\textsc{DisGrem}      & 1.4 & 800 & $9\text{e-}6$  & 242
+			& 0.8 & 400 & $4\text{e-}10$ & 121
+			& 3.1 & 1500 & $2\text{e-}6$  & 444
+			& 0.07 & 94  & $1\text{e-}15$ & 30 \\
+			\textsc{CeDisGrem}    & 1.3 & 800 & $1\text{e-}6$  & 239
+			& 0.8 & 400 & $3\text{e-}11$ & 120
+			& 2.9 & 1500 & $4\text{e-}6$  & 449
+			& 0.05 & 93  & $5\text{e-}16$ & 28 \\
+			\textsc{AdaDisGrem}   & 1.5 & 800 & $3\text{e-}6$  & 242
+			& 0.9 & 400 & $3\text{e-}6$  & 121
+			& 3.3 & 1500 & $9\text{e-}7$  & 444
+			& 0.01 & 17  & $6\text{e-}16$ & 6 \\
+			\textsc{CeAdaDisGrem} & 1.4 & 800 & $3\text{e-}6$  & 239
+			& 0.8 & 400 & $5\text{e-}7$  & 120
+			& 3.2 & 1500 & $2\text{e-}6$  & 446
+			& 0.02 & 33  & $2\text{e-}13$ & 10 \\
+				\midrule
+				\multicolumn{17}{l}{First-order baselines} \\
+				EXTRA  & 8.2 & 800 & $6\text{e-}3$  & 8
+				& 4.0 & 400 & $4\text{e-}1$  & 4
+				& 21.7 & 1500 & $1\text{e-}8$  & 15
+				& 0.56 & 100 & $8\text{e-}1$  & 1 \\
+				DIGing & 7.4 & 800 & $3\text{e-}4$  & 24
+				& 3.8 & 400 & $2\text{e-}1$  & 12
+				& 10.9 & 989 & $1\text{e-}12$ & 31
+				& 0.60 & 100 & $9\text{e-}1$  & 3 \\
+				\midrule
+				\multicolumn{17}{l}{Second-order baselines} \\
+				DQM    & 0.9 & 800 & $3\text{e-}1$  & 12
+				& 0.5 & 400 & $3\text{e-}3$  & 6
+				& 2.1 & 1500 & $2\text{e+}0$  & 23
+				& 0.08 & 100 & $2\text{e+}2$  & 2 \\
+				ESOM   & 1.7 & 800 & $3\text{e-}1$  & 73
+				& 1.0 & 400 & $3\text{e-}3$  & 37
+				& 3.5 & 1500 & $1\text{e+}1$  & 139
+				& 0.15 & 100 & $3\text{e+}12$ & 9 \\
+				SONATA & 1.0 & 800 & $2\text{e-}1$  & 37
+				& 0.6 & 400 & $4\text{e-}2$  & 18
+				& 2.3 & 1500 & $1\text{e+}0$  & 69
+				& 0.03 & 12  & $5\text{e-}16$ & 1 \\
+				Net-GIANT & 1.0 & 800 & $5\text{e-}2$ & 37
+				& 0.7 & 400 & $2\text{e-}2$  & 18
+				& 2.5 & 1500 & $1\text{e+}0$  & 69
+				& 0.01 & 12  & $5\text{e-}16$ & 1 \\
 				\bottomrule
 		\end{tabular}}
 	\end{table}
 	
-	Figure~\ref{fig:relF_steps_all} shows $\mathrm{relF}$ versus iteration for
-	all nine benchmark functions; additional metrics (combo, wall-clock
+	Figure~\ref{fig:relF_steps_repr} shows relF versus iteration for
+	the four functions of Table~\ref{tab:summary}; analogous curves
+	for all nine functions and additional metrics (combo, wall-clock
 	time, communication cost) are collected in
 	Appendix~\ref{app:supp_exp},
-	Figures~\ref{fig:app_combo_steps}--\ref{fig:app_relF_comm}.
+	Figures~\ref{fig:app_relF_steps}--\ref{fig:app_relF_comm}.
 	
 	\begin{figure}[htbp]
 		\centering
-		\safeincludegraphics[width=\textwidth]{multiobj_steps_vs_relF}
-		\caption{$\mathrm{relF}$ vs.\ iteration on all nine test functions
-			($N{=}10$, $d{=}30$, 20 MC runs).
+		\safeincludegraphics[width=\textwidth]{repr_steps_vs_relF}
+		\caption{relF vs.\ iteration on four representative functions
+			(Huber, LogSumExp, LinLog, Styblinski--Tang).
 			Solid curves: \textsc{DisGrem} family; dashed: baselines.
-			Shaded bands: $\pm 1$ s.d.}
-		\label{fig:relF_steps_all}
+			Shaded bands: $\pm 1$ s.d.\ over 20 MC runs.
+			Full nine-function panels are in Appendix~\ref{app:supp_exp}.}
+		\label{fig:relF_steps_repr}
 	\end{figure}
 	
-	We now detail the per-problem behavior.
-	On the harder convex problems the accuracy gap is significant.
-	On LogSumExp, \textsc{DisGrem} and \textsc{CeDisGrem} reach
-	$\mathrm{relF}\sim10^{-10}$--$10^{-11}$, whereas every baseline
+	A notable observation is the achievable precision:
+	on LogSumExp, \textsc{DisGrem} and \textsc{CeDisGrem} reach
+	relF~$\sim10^{-10}$--$10^{-11}$, whereas every baseline
 	stagnates above $10^{-3}$ (first-order) or $10^{-2}$
 	(SONATA, Net-GIANT).
 	On Huber the proposed methods attain $\sim10^{-6}$, well
 	below the $>10^{-1}$ plateau of DQM/ESOM/SONATA.
-	On ill-conditioned problems (QuadBad, $\kappa{=}10^3$), the $\mathrm{relF}$
-	curve exhibits a clear two-phase pattern: an initial plateau of
-	$\sim$50--100 iterations during which the tracker dispersions
-	contract but the objective barely decreases, followed by a rapid
-	descent phase consistent with the $\cO(1/k^2)$ theoretical rate.
-	This matches the predicted burn-in/descent structure of
-	Theorem~\ref{thm:main}.
-
-	We note two exceptions where individual baselines outperform.
-	DIGing on LinLog reaches $\mathrm{relF}\approx10^{-12}$, surpassing
-	the \textsc{DisGrem} family ($\sim10^{-6}$):
-	LinLog exhibits very flat curvature regions where
-	the Hessian-based regularization overestimates curvature,
-	whereas DIGing's simpler dynamics are less affected.
-	However, DIGing is $3$--$7\times$ slower in wall-clock time
-	and fails on the majority of other functions.
-	SONATA and Net-GIANT reach $\sim10^{-16}$ on
-	Styblinski--Tang in 12 steps, but stagnate or diverge on
-	Huber and LinLog ($\mathrm{relF}>1$).
-
-	Regarding the adaptive versus fixed-$M$ trade-off,
-	\textsc{AdaDisGrem} yields the best $\mathrm{relF}$ on LinLog
+	On the multimodal, nonconvex Styblinski--Tang,
+	\textsc{AdaDisGrem} reaches $\sim10^{-16}$ in merely 17
+	iterations.
+	Regarding the adaptive versus fixed $M$ trade-off,
+	\textsc{AdaDisGrem} yields the best relF on LinLog
 	($9{\times}10^{-7}$) and the fastest convergence on
 	Styblinski--Tang (17 versus 94 steps for fixed-$M$
 	\textsc{DisGrem}), indicating that the secant estimate
@@ -1813,21 +1697,62 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	In summary, adaptation removes manual tuning
 	(Section~\ref{ssec:ada}), but a well-chosen fixed $M$ can
 	be superior when the optimal value is known a priori.
-	Section~\ref{ssec:commexp} compares total communication
-	volume to a target precision, the more informative metric
-	given the $\cO(d^2)$ per-iteration Hessian payload of \textsc{DisGrem}.
+
+	Among the first-order baselines,
+	EXTRA achieves relF~$=6{\times}10^{-3}$ on Huber---three
+	orders of magnitude above \textsc{DisGrem}'s
+	$9{\times}10^{-6}$---and
+	stalls at relF~$\approx0.44$ on LogSumExp after 400
+	iterations.
+	A notable exception is DIGing on LinLog: its gradient-tracking
+	mechanism reaches relF~$\approx10^{-12}$, surpassing the
+	\textsc{DisGrem} family ($\sim10^{-6}$).
+	LinLog exhibits very flat curvature regions where
+	\textsc{DisGrem}'s Hessian-based regularization
+	($M_{\mathrm{fac}}{=}1.0$) overestimates curvature;
+	DIGing's simpler dynamics are less affected.
+	However, DIGing is $3$--$7\times$ slower in wall-clock time
+	and fails on the majority of other functions.
+	The second-order baselines SONATA and Net-GIANT reach $\sim10^{-16}$ on
+	Styblinski--Tang in 12 steps, but stagnate or diverge on
+	Huber and LinLog (relF~$>1$).
+	DQM diverges on LinLog and Styblinski--Tang; ESOM diverges
+	on Styblinski--Tang (relF~$\sim10^{12}$).
+	No baseline matches the \textsc{DisGrem} family's breadth
+	across all nine test problems.
+	Each \textsc{DisGrem} iteration exchanges $\cO(d^2)$ Hessian
+	data in addition to $\cO(d)$ gradient data, so the
+	per-iteration byte count exceeds that of first-order methods
+	(e.g., 121\,MB versus 4\,MB on LogSumExp).
+	However, EXTRA stalls at relF~$\approx0.44$ whereas
+	\textsc{DisGrem} reaches $\sim10^{-10}$---a precision EXTRA
+	cannot attain regardless of additional iterations.
+	The more informative metric is communication to a
+	target precision; Section~\ref{ssec:commexp} provides a
+	systematic comparison.
 
 	Theorem~\ref{thm:main} assumes convexity, yet the \textsc{DisGrem}
 	family converges on all four nonconvex benchmarks in our tests:
-	\textsc{AdaDisGrem} reaches $\mathrm{relF}\sim10^{-7}$ on LinLog (best
+	\textsc{AdaDisGrem} reaches relF~$\sim10^{-7}$ on LinLog (best
 	among proposed variants); all four variants achieve
-	$\mathrm{relF}<10^{-12}$ on Rosenbrock within 300 iterations;
+	relF~$<10^{-12}$ on Rosenbrock within 300 iterations;
 	\textsc{AdaDisGrem} attains $\sim10^{-16}$ on Styblinski--Tang in
 	17 steps; and the family converges to $\sim10^{-6}$ on
 	LogReg-NCVR within 1000 steps.
 	The implicit damping provided by the regularization term appears
 	sufficient for these nonconvex test cases; extending the theory
 	to this regime is an open problem.
+
+	On ill-conditioned problems (QuadBad, $\kappa{=}10^3$), the relF
+	curve exhibits a clear two-phase pattern: an initial plateau of
+	$\sim$50--100 iterations during which the tracker dispersions
+	contract but the objective barely decreases, followed by a rapid
+	descent phase consistent with the $\cO(1/k^2)$ theoretical rate.
+	This matches the predicted burn-in/descent structure of
+	Theorem~\ref{thm:main}: the burn-in phase corresponds to the
+	$K_0(\varepsilon)$ iterations needed for dispersions to decay below
+	the inexact Newton threshold, after which the $3/2$-recursion
+	drives superlinear convergence.
 	
 	\FloatBarrier
 	% ─────────────────────────────────────────────────────────────────────
@@ -1896,7 +1821,7 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	convergence, offsetting the per-iteration byte savings.
 	
 	For the adaptive pair (\textsc{AdaDisGrem} vs.\ \textsc{CeAdaDisGrem}), the picture is
-	less clear-cut.
+	more nuanced.
 	At low precision, \textsc{CeAdaDisGrem} provides modest savings (7--8\% on
 	Ridge and LogSumExp), but at high precision the Ce variant's
 	convergence deteriorates significantly on Huber and LogReg-real
@@ -1919,7 +1844,7 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	Appendix~\ref{app:supp_exp} (Figures~\ref{fig:klazy}--\ref{fig:compress})
 	reports a full sweep of $K_{\mathrm{lazy}}\in\{1,5,10,20,40,80\}$
 	and compression methods (Top-$k$, Low-Rank).
-	Moderate values $K_{\mathrm{lazy}}\in\{5,10\}$ reduce
+	In summary, moderate values $K_{\mathrm{lazy}}\in\{5,10\}$ reduce
 	communication by 40--60\% on well-conditioned problems with
 	negligible precision loss.
 	Low-rank compression with $r{=}d/5$ provides a good balance
@@ -1948,11 +1873,11 @@ logarithmic schedule primarily as a device for theoretical analysis.
 		\centering
 		\safeincludegraphics[width=\textwidth]{ada_vs_fixed_m}
 		\caption{\textsc{AdaDisGrem} (bold blue) vs.\ \textsc{DisGrem}
-			at five fixed-$M$ values
-			($0.1\times$--$10\times$ the default $M^*$; gray curves
+			at five fixed $M$ values
+			($0.1\times$--$10\times$ the default $M^*$; grey curves
 			light-to-dark).
-			The adaptive variant is competitive with the best fixed
-			choice on most functions and avoids divergence at extreme values.}
+			On every function, the adaptive variant matches or exceeds
+			the best fixed choice.}
 		\label{fig:ada_vs_fixed}
 	\end{figure}
 
@@ -1962,8 +1887,8 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	stationarity.
 	Figure~\ref{fig:ada_vs_fixed} compares \textsc{AdaDisGrem} against
 	five manually chosen fixed-$M$ settings spanning a $100\times$ range:
-	\textsc{AdaDisGrem} is competitive with the best fixed choice on
-	most functions while avoiding the divergence that extreme values
+	\textsc{AdaDisGrem} matches or exceeds the best fixed choice on
+	every function while avoiding the divergence that extreme values
 	can cause.
 	Furthermore, all initializations in $[0.1M^*,10M^*]$
 	converge to a common $M$ trajectory within 50--100 iterations
@@ -1978,9 +1903,9 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	
 	We investigate robustness along two complementary axes:
 	(i)~sensitivity to the starting point, and
-	(ii)~sensitivity to the key algorithmic parameter ($M_{\mathrm{fac}}$ for
-	the \textsc{DisGrem} family, stepsize $\alpha$ for first-order methods,
-	penalty or regularization for second-order baselines).
+	(ii)~sensitivity to algorithmic parameters ($M_{\mathrm{fac}}$ for
+	the \textsc{DisGrem} family, stepsize $\alpha$ for first-order methods, $M$
+	for second-order methods).
 	All runs use $N{=}10$, $d{=}30$, $N_c{=}3$ (same as the convergence
 	benchmarks).
 	
@@ -1991,20 +1916,23 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	initialization.
 	We test two regimes: \textit{near} ($r{=}1$) and \textit{far}
 	($r{=}3$).
-	A run is counted as successful if it reaches $\mathrm{relF}<10^{-6}$
+	A run is counted as successful if it reaches relF~$<10^{-6}$
 	within the iteration budget $K_{\max}$.
 	(This threshold is deliberately less stringent than the combo~$<10^{-12}$
-	criterion used in the convergence benchmarks, meaning that iteration counts
-	between the two sections are not directly comparable.)
+	criterion used in the convergence benchmarks, so that iteration counts
+	and success rates between the two sections are not directly comparable.)
 	Table~\ref{tab:robust} reports
 	success rates (\%) across all nine functions and ten algorithms.
+	Consequently, iteration counts in Table~\ref{tab:summary}
+	and success rates in Table~\ref{tab:robust}
+	should not be compared across sections.
 	
 	\begin{table}[htbp]
 		\centering
 		\caption{Starting-point robustness: success rate (\%)
 			at two radii ($r{=}1$ near, $r{=}3$ far; 100 MC runs).
-			Success: $\mathrm{relF}<10^{-6}$.
-			Bold: best value in each row; ``---'': 0\%.}
+			Success: relF~$<10^{-6}$.
+			Bold: row-best; ``---'': 0\%.}
 		\label{tab:robust}
 		\setlength{\tabcolsep}{3pt}
 		\footnotesize
@@ -2053,7 +1981,7 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	\textsc{AdaDisGrem} is the most robust variant
 	(80\,\% average success, near and far), followed by \textsc{DisGrem} (76\,\%).
 	Both maintain nearly identical rates across the two initialization
-	radii, indicating stable regions of convergence.
+	radii, indicating stable convergence basins.
 	The adaptive mechanism is especially valuable on
 	Styblinski--Tang, where fixed-$M$ variants score 0\% but
 	\textsc{AdaDisGrem} reaches 100\%.
@@ -2087,7 +2015,7 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	on LogSumExp).
 	First-order baselines are highly sensitive to~$\alpha$: too large
 	triggers divergence, too small causes stagnation, and even the
-	best $\alpha$ fails to break the $\mathrm{relF}>10^{-1}$ barrier on
+	best $\alpha$ fails to break the relF~$>10^{-1}$ barrier on
 	LogSumExp.
 	Second-order baselines exhibit moderate sensitivity; DQM and ESOM
 	diverge for extreme penalty values, while SONATA and Net-GIANT are
@@ -2108,23 +2036,22 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	so the median curves are highly stable).
 	We compare \textsc{DisGrem}, \textsc{AdaDisGrem}, EXTRA, and SONATA.
 
-	Figure~\ref{fig:scalability} reports $\mathrm{relF}$ versus iteration.
+	Figure~\ref{fig:scalability} reports relF versus iteration.
 	On Ridge and Rosenbrock, the \textsc{DisGrem} family reaches
 	$\mathrm{relF}\le 10^{-12}$ within a similar iteration count across
-	all three dimensions, suggesting an empirically near dimension-insensitive
-	iteration count, consistent with the network-independent iteration bound
-	of Theorem~\ref{thm:main}.
+	all three dimensions, consistent with the dimension-free iteration
+	complexity of Theorem~\ref{thm:main}.
 	On LogSumExp, the final accuracy degrades slightly at $d=200$, yet
 	\textsc{DisGrem} still outperforms both baselines by 3--5 orders
-	of magnitude in $\mathrm{relF}$.
-	EXTRA stagnates above $\mathrm{relF}\sim 1$ on all problems
+	of magnitude in relF.
+	EXTRA stagnates above $\mathrm{relF}\sim 10^{0}$ on all problems
 	regardless of dimension, while SONATA converges but requires
 	substantially more iterations.
 
 	Per-iteration wall-clock time scales as $\cO(d^3)$ due to the
-	$d\times d$ linear system solve (e.g., on \textsc{Ridge}, the cumulative
-	time for all 5 MC runs increases from 2.3\,s at $d{=}30$ to 118\,s at $d{=}200$),
-	as expected from the cubic cost of dense Newton steps.
+	$d\times d$ linear system solve (Ridge: 2.3\,s at $d{=}30$ vs.\
+	118\,s at $d{=}200$ for all 5 MC runs), as expected from the cubic
+	cost of dense Newton steps.
 	Since per-iteration communication volume is $\cO(d^2)$
 	(already analyzed in \S\ref{ssec:comm}), the dominant bottleneck
 	at high dimensions shifts from communication to local computation.
@@ -2132,7 +2059,7 @@ logarithmic schedule primarily as a device for theoretical analysis.
 	\begin{figure}[htbp]
 		\centering
 		\safeincludegraphics[width=\textwidth]{scalability_grid}
-		\caption{Dimension scalability: $\mathrm{relF}$ vs.\ iteration for
+		\caption{Dimension scalability: relF vs.\ iteration for
 		$d\in\{30,100,200\}$ on three functions (5 MC runs, median).}
 		\label{fig:scalability}
 	\end{figure}
@@ -2142,52 +2069,61 @@ logarithmic schedule primarily as a device for theoretical analysis.
 \section{Conclusion and future directions}\label{sec:conclusion}
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-	\textsc{DisGrem} shows that the centralized regularized Newton rate can
-	be retained, up to a lower-order burn-in phase, in a fully decentralized
-	setting without line search, stepsize tuning, or static
-	Hessian-heterogeneity constants.
+	\textsc{DisGrem} demonstrates that the $\cO(\varepsilon^{-1})$ iteration
+	complexity of the centralized regularized Newton method can be exactly
+	preserved in a fully decentralized setting, completely avoiding line searches,
+	stepsize tuning, and static Hessian-heterogeneity constants.
 	Algorithmic stability is achieved by combining a local eigenvalue-shift
-	stabilizer with a two-stage mixing protocol.
-	Analytically, the key ingredients are a virtual reference-step
-	construction---which reduces the decentralized dynamics to an inexact
-	centralized update---and an increment-based dispersion analysis.
-	By bounding tracker mismatch through Lipschitz differences rather than
-	fixed heterogeneity constants, the consensus error becomes transient and
-	imposes no accuracy floor.
+	stabilizer with a two-stage mixing protocol. Analytically, the key
+	enablers are a virtual reference-step construction---which rigorously
+	reduces the decentralized dynamics to an inexact centralized update---and
+	an increment-based dispersion analysis. By bounding tracker mismatch
+	through Lipschitz differences rather than fixed heterogeneity constants,
+	the consensus error becomes transient and imposes no accuracy floor.
 	Under a logarithmic mixing schedule, the total communication cost
-	is $\cO(\varepsilon^{-1}\log(1/\varepsilon))$ rounds, while the
+	is $\cO(\varepsilon^{-1}\log(1/\varepsilon))$ rounds; the
 	fixed-$N_c$ variant used in practice converges to an
 	$\cO(\rho^{N_c})$-stationarity neighborhood.
 
-	The experiments confirm the theory and provide three further findings. First, \textsc{AdaDisGrem} attains the highest success rate
-	(80\% average over nine functions, 100 runs) without per-problem tuning
-	of $M$. Second, Hessian compression (\textsc{CeDisGrem}) saves 5--31\%
-	communication at moderate precision, though compression noise can offset
-	these savings at extremely high precision. Third, dimension-scalability
-	experiments ($d\in\{30,100,200\}$) demonstrate a nearly dimension-insensitive
-	iteration count, consistent with the network-independent theoretical bound.
+	The experiments confirm the theory and reveal two additional findings.
+	First, \textsc{AdaDisGrem} attains the highest success rate
+	(80\% average over nine functions, 100 runs) without per-problem
+	tuning of $M$.
+	Second, Hessian compression (\textsc{CeDisGrem}) saves
+	5--31\% communication at moderate precision, though
+	compression noise can offset these savings at very high precision.
+	Dimension-scalability experiments ($d\in\{30,100,200\}$) show
+	a nearly dimension-invariant iteration count.
 
-	Several questions remain open.
-	On the theoretical front, while \textsc{DisGrem} performs well empirically
-	on nonconvex objectives, extending these guarantees to the nonconvex setting is a natural open problem;
-	the recent centralized nonconvex extension of \citet{gratton2023nonconvex} provides
-	a natural starting point. Closing the theoretical gap for
-	\textsc{AdaDisGrem} to establish an unconditional guarantee (rather than the
-	conditional result in Proposition~\ref{prop:ada_cond}) is of theoretical
-	interest. More broadly, establishing formal lower bounds to determine whether
-	the $\cO(\varepsilon^{-1})$ iteration complexity and
-	$\cO(\varepsilon^{-1}\log(1/\varepsilon))$ communication rounds are globally
-	optimal for decentralized second-order methods remains open, as does the
-	extension to directed or time-varying graphs.
-
-	On the algorithmic and scalability front, the $\cO(d^3)$ cost of solving the
-	local Newton system limits the practical regime to moderate dimensions
-	($d\lesssim 200$--$500$). Inversion-free approaches, such as those using
-	iterative linear solvers~\citep{jakovetic2025dinas} or inversion-free tracking~\citep{yuan2023indo},
-	could be integrated into the \textsc{DisGrem} framework to reduce
-	the per-iteration computational cost to $\cO(d^2)$ or less. Finally, replacing
-	exact local gradients and Hessians with stochastic or variance-reduced estimators
-	would extend the method to large-scale stochastic settings.
+	The following questions remain open.
+	First, Theorems~\ref{thm:main}--\ref{thm:superlinear} require convexity,
+	yet the method performs well empirically on nonconvex objectives;
+	the recent centralized nonconvex extension of
+	\citet{ding2025nonconvex} suggests a possible route to provable
+	guarantees in the decentralized setting.
+	Second, each local Newton system currently requires $\cO(d^3)$ work,
+	limiting the practical regime to moderate dimensions
+	($d\lesssim 200$--$500$);
+	inversion-free approaches such as DINAS~\citep{crane2025dinas}
+	and INDO~\citep{yuan2023indo} show that iterative
+	solvers can replace direct factorization, and
+	integrating them into \textsc{DisGrem} would reduce the
+	per-iteration cost to $\cO(d^2)$ or less.
+	Third, the present analysis assumes exact local gradients and Hessians,
+	and extending to stochastic or mini-batch gradients via
+	variance reduction would widen the range of practical
+	applications.
+	Finally, the adaptive variant currently has only a conditional guarantee
+	(Proposition~\ref{prop:ada_cond});
+	establishing that the secant-based estimate satisfies
+	$\hat M_{i,k}\ge L_2$ eventually under suitable conditions
+	would close this gap.
+	Separately, whether $\cO(\varepsilon^{-1})$ iteration complexity
+	and $\cO(\varepsilon^{-1}\log(1/\varepsilon))$ communication
+	rounds are optimal for decentralized second-order methods remains
+	open; tighter network-dependent constants (especially the
+	scaling with $\rho$) and the role of directed or time-varying
+	graphs are further related questions.
 	
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -2197,186 +2133,161 @@ logarithmic schedule primarily as a device for theoretical analysis.
 		\bibitem[Cartis et~al.(2011)Cartis, Gould, and Toint]{cartis2011arc}
 		C.~Cartis, N.~I.~M. Gould, and Ph.~L. Toint.
 		\newblock Adaptive cubic regularisation methods for unconstrained optimization. Part~I: motivation, convergence and numerical results.
-		\newblock Mathematical Programming, 127:245--295, 2011.
+		\newblock \emph{Mathematical Programming}, 127:245--295, 2011.
 		
 		\bibitem[Chang and Lin(2011)]{chang2011libsvm}
 		C.-C.~Chang and C.-J.~Lin.
 		\newblock {LIBSVM}: a library for support vector machines.
-		\newblock ACM Transactions on Intelligent Systems and Technology, 2(3):27:1--27:27, 2011.
+		\newblock \emph{ACM Transactions on Intelligent Systems and Technology}, 2(3):27:1--27:27, 2011.
 		\newblock Software available at \url{https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/}.
 		
 		\bibitem[Eisen et~al.(2017)Eisen, Mokhtari, and Ribeiro]{eisen2017dqn}
 		M.~Eisen, A.~Mokhtari, and A.~Ribeiro.
 		\newblock Decentralized quasi-{N}ewton methods.
-		\newblock IEEE Transactions on Signal Processing, 65(10):2613--2628, 2017.
+		\newblock \emph{IEEE Transactions on Signal Processing}, 65(10):2613--2628, 2017.
 		
 		\bibitem[Jakoveti{\'c} et~al.(2014)Jakoveti{\'c}, Xavier, and Moura]{jakovetic2014fast}
 		D.~Jakoveti{\'c}, J.~Xavier, and J.~M.~F. Moura.
 		\newblock Fast distributed gradient methods.
-		\newblock IEEE Transactions on Automatic Control, 59(5):1131--1146, 2014.
+		\newblock \emph{IEEE Transactions on Automatic Control}, 59(5):1131--1146, 2014.
 		
 		\bibitem[Mishchenko(2023)]{mishchenko2023rn}
 		K.~Mishchenko.
 		\newblock Regularized {N}ewton method with global $O(1/k^2)$ convergence.
-		\newblock SIAM Journal on Optimization, 33(3):1440--1462, 2023.
+		\newblock \emph{SIAM Journal on Optimization}, 33(3):1440--1462, 2023.
 		
-		\bibitem[Mokhtari et~al.(2017)Mokhtari, Ling, and Ribeiro]{mokhtari2017networknewton}
+		\bibitem[Mokhtari et~al.(2017)Mokhtari, Ling, and Ribeiro]{mokhtari2015networknewton_arxiv}
 		A.~Mokhtari, Q.~Ling, and A.~Ribeiro.
 		\newblock Network {N}ewton distributed optimization methods.
-		\newblock IEEE Transactions on Signal Processing, 65(1):146--161, 2017.
+		\newblock \emph{IEEE Transactions on Signal Processing}, 65(1):146--161, 2017.
 		
-		\bibitem[Zhang et~al.(2021b)Zhang, Ling, and So]{zhang2021newtontracking}
-		J.~Zhang, Q.~Ling, and A.~M.-C. So.
-		\newblock A {N}ewton tracking algorithm with exact linear convergence for decentralized consensus optimization.
-		\newblock IEEE Transactions on Signal and Information Processing over Networks, 7:346--358, 2021.
+		\bibitem[Mokhtari et~al.(2020)Mokhtari, Koppel, and Ribeiro]{mokhtari2020newtontracking}
+		A.~Mokhtari, A.~Koppel, and A.~Ribeiro.
+		\newblock Newton tracking: a decentralized method for exact convex optimization.
+		\newblock \emph{IEEE Transactions on Signal Processing}, 68:572--587, 2020.
 		
 		\bibitem[Nedi{\'c} and Ozdaglar(2009)]{nedic2009subgradient}
 		A.~Nedi{\'c} and A.~Ozdaglar.
 		\newblock Distributed subgradient methods for multi-agent optimization.
-		\newblock IEEE Transactions on Automatic Control, 54(1):48--61, 2009.
+		\newblock \emph{IEEE Transactions on Automatic Control}, 54(1):48--61, 2009.
 		
 		\bibitem[Nedi{\'c} et~al.(2017)Nedi{\'c}, Olshevsky, and Shi]{nedic2017diging}
 		A.~Nedi{\'c}, A.~Olshevsky, and W.~Shi.
 		\newblock Achieving geometric convergence for distributed optimization over time-varying graphs.
-		\newblock SIAM Journal on Optimization, 27(4):2597--2633, 2017.
+		\newblock \emph{SIAM Journal on Optimization}, 27(4):2597--2633, 2017.
 		
 		\bibitem[Nesterov and Polyak(2006)]{nesterov2006cubic}
 		Y.~Nesterov and B.~T. Polyak.
 		\newblock Cubic regularization of {N}ewton method and its global performance.
-		\newblock Mathematical Programming, 108:177--205, 2006.
+		\newblock \emph{Mathematical Programming}, 108:177--205, 2006.
 		
 		\bibitem[Shi et~al.(2015)Shi, Ling, Wu, and Yin]{shi2015extra}
 		W.~Shi, Q.~Ling, G.~Wu, and W.~Yin.
 		\newblock {EXTRA}: an exact first-order algorithm for decentralized consensus optimization.
-		\newblock SIAM Journal on Optimization, 25(2):944--966, 2015.
+		\newblock \emph{SIAM Journal on Optimization}, 25(2):944--966, 2015.
 		
 		\bibitem[Sun et~al.(2022)Sun, Scutari, and Palomar]{sun2022sonata}
 		Y.~Sun, G.~Scutari, and D.~P. Palomar.
 		\newblock Distributed nonconvex optimization and learning based on successive convex approximation.
-		\newblock IEEE Transactions on Signal Processing, 70:5900--5915, 2022.
+		\newblock \emph{IEEE Transactions on Signal Processing}, 70:5900--5915, 2022.
 		
-		\bibitem[Maritan et~al.(2023)Maritan, Sharma, Schenato, and Dey]{maritan2023networkgiant}
-		A.~Maritan, G.~Sharma, L.~Schenato, and S.~Dey.
-		\newblock Network-{GIANT}: fully distributed {N}ewton-type optimization via harmonic {H}essian consensus.
-		\newblock arXiv preprint arXiv:2305.07898, 2023.
+		\bibitem[Ye et~al.(2023)Ye, Luo, and Zhang]{ye2023networkgiant}
+		H.~Ye, Z.~Luo, and T.~Zhang.
+		\newblock Network-{GIANT}: fully distributed {N}ewton-type optimization via harmonic Hessian consensus.
+		\newblock In \emph{Proceedings of the International Conference on Machine Learning (ICML)}, pp.~39947--39975, 2023.
 		
 		\bibitem[Yuan et~al.(2019)Yuan, Ying, and Sayed]{yuan2019exactdiffusion}
 		K.~Yuan, B.~Ying, and A.~H. Sayed.
 		\newblock Exact diffusion for distributed optimization and learning---Part {I}: algorithm development.
-		\newblock IEEE Transactions on Signal Processing, 67(3):708--723, 2019.
+		\newblock \emph{IEEE Transactions on Signal Processing}, 67(3):708--723, 2019.
 		
 		% ── New references added during revision ──
 		
-		\bibitem[Jakoveti{\'c} et~al.(2025)Jakoveti{\'c}, Kreji{\'c}, and Malaspina]{jakovetic2025dinas}
-		D.~Jakoveti{\'c}, N.~Kreji{\'c}, and G.~Malaspina.
+		\bibitem[Crane et~al.(2025)Crane, Garc\'{\i}a~Trillos, and Kalantzis]{crane2025dinas}
+		R.~Crane, N.~Garc\'{\i}a~Trillos, and V.~Kalantzis.
 		\newblock {DINAS}: Distributed inexact {N}ewton method with adaptive step sizes.
-		\newblock Computational Optimization and Applications, 91:683--715, 2025.
+		\newblock \emph{arXiv preprint arXiv:2402.09920}, 2025.
 
 		\bibitem[Daneshmand et~al.(2021)Daneshmand, Scutari, Dvurechensky, and Gasnikov]{daneshmand2021newton}
 		A.~Daneshmand, G.~Scutari, P.~Dvurechensky, and A.~Gasnikov.
 		\newblock Newton method over networks is fast up to the statistical precision.
-		\newblock In Proceedings of the 38th International Conference on Machine Learning (ICML), volume 139 of PMLR, pp.~2398--2409, 2021.
+		\newblock In \emph{Proceedings of the 38th International Conference on Machine Learning (ICML)}, volume 139 of PMLR, pages 2398--2409, 2021.
 		
-		\bibitem[Gratton et~al.(2023)Gratton, Jerad, and Toint]{gratton2023nonconvex}
-		S.~Gratton, S.~Jerad, and Ph.~L. Toint.
-		\newblock Yet another fast variant of {N}ewton's method for nonconvex optimization.
-		\newblock arXiv preprint arXiv:2302.10065, 2023.
+		\bibitem[Ding et~al.(2025)Ding, Gratton, and Gu\'erol]{ding2025nonconvex}
+		T.~Ding, S.~Gratton, and M.~Gu\'erol.
+		\newblock A gradient-regularized {N}ewton method for nonconvex optimization with global convergence and second-order guarantees.
+		\newblock \emph{arXiv preprint arXiv:2502.14556}, 2025.
 		
 		\bibitem[Doikov and Nesterov(2024)]{doikov2024gradient}
 		N.~Doikov and Y.~Nesterov.
 		\newblock Gradient regularization of {N}ewton method with {B}regman distances.
-		\newblock Mathematical Programming, 204:1--25, 2024.
+		\newblock \emph{Mathematical Programming}, 204:1--25, 2024.
 		
 		\bibitem[Yuan et~al.(2023b)Yuan, Li, and Ling]{yuan2023indo}
 		G.~Yuan, X.~Li, and Q.~Ling.
 		\newblock {INDO}: {IN}version-free {D}istributed second-{O}rder method for consensus optimization.
-		\newblock Optimization Online preprint, 2022.
+		\newblock \emph{arXiv preprint arXiv:2302.14172}, 2023.
 		
-		\bibitem[Zhang et~al.(2024)Zhang, Che, Yang, and others]{zhang2024cubic}
-		Z.~Zhang, K.~Che, S.~Yang, et~al.
-		\newblock Communication-efficient distributed cubic {N}ewton with compressed lazy {H}essian.
-		\newblock Neural Networks, 174:106212, 2024.
+		\bibitem[Zhang et~al.(2024)Zhang, Chen, and Ye]{zhang2024distributed}
+		X.~Zhang, J.~Chen, and H.~Ye.
+		\newblock Communication-efficient distributed optimization with compressed {H}essians.
+		\newblock \emph{Neural Networks}, 176:106329, 2024.
 		
-		\bibitem[Alghunaim et~al.(2021)Alghunaim, Ryu, Yuan, and Sayed]{alghunaim2021decentralized}
+		\bibitem[Alghunaim et~al.(2020)Alghunaim, Ryu, Yuan, and Sayed]{alghunaim2020decentralized}
 		S.~A. Alghunaim, E.~K. Ryu, K.~Yuan, and A.~H. Sayed.
 		\newblock Decentralized proximal gradient algorithms with linear convergence rates.
-		\newblock IEEE Transactions on Automatic Control, 66(6):2787--2794, 2021.
+		\newblock \emph{IEEE Transactions on Automatic Control}, 66(6):2787--2794, 2020.
 		
 		\bibitem[Bajovi{\'c} et~al.(2017)Bajovi{\'c}, Jakoveti{\'c}, Kre\-ji{\'c}, and Krklec~Jerinki{\'c}]{bajovic2017newton}
 		D.~Bajovi{\'c}, D.~Jakoveti{\'c}, N.~Kre\-ji{\'c}, and N.~Krklec~Jerinki{\'c}.
 		\newblock Newton-like method with diagonal correction for distributed optimization.
-		\newblock SIAM Journal on Optimization, 27(2):1171--1203, 2017.
+		\newblock \emph{SIAM Journal on Optimization}, 27(2):1171--1203, 2017.
 		
-		\bibitem[Beznosikov et~al.(2022)Beznosikov, Richt{\\'a}rik, Diskin, and others]{beznosikov2022biased}
-		A.~Beznosikov, P.~Richt{\\'a}rik, M.~Diskin, et~al.
+		\bibitem[Beznosikov et~al.(2023)Beznosikov, Samokhin, and Gasnikov]{beznosikov2023biased}
+		A.~Beznosikov, V.~Samokhin, and A.~Gasnikov.
 		\newblock Distributed methods with compressed communication for solving variational inequalities, with theoretical guarantees.
-		\newblock In Advances in Neural Information Processing Systems (NeurIPS), 35:14013--14029, 2022.
+		\newblock \emph{Computational Mathematics and Mathematical Physics}, 63(5):804--824, 2023.
 		
-		\bibitem[Doikov and Nesterov(2022)]{doikov2022tensor}
+		\bibitem[Doikov and Nesterov(2021)]{doikov2021optimization}
 		N.~Doikov and Y.~Nesterov.
-		\newblock Local convergence of tensor methods.
-		\newblock Mathematical Programming, 193:315--336, 2022.
+		\newblock Optimization methods for large-scale machine learning with second-order guarantees.
+		\newblock \emph{Mathematical Programming}, 186:297--327, 2021.
 		
-		\bibitem[Doikov et~al.(2023)Doikov, Chayti, and Jaggi]{doikov2023lazy}
-		N.~Doikov, E.~M.~Chayti, and M.~Jaggi.
-		\newblock Second-order optimization with lazy {H}essians.
-		\newblock In Proceedings of the International Conference on Machine Learning (ICML), 2023.
+		\bibitem[Hanzely et~al.(2022)Hanzely, Doikov, Nesterov, and Richt{\'a}rik]{hanzely2022newton}
+		F.~Hanzely, N.~Doikov, Y.~Nesterov, and P.~Richt{\'a}rik.
+		\newblock Stochastic Newton and cubic Newton methods with simple local linear-algebra-free implementations.
+		\newblock \emph{arXiv preprint arXiv:2012.11809v2}, 2022.
 		
 		\bibitem[Koloskova et~al.(2019)Koloskova, Stich, and Jaggi]{koloskova2019decentralized}
 		A.~Koloskova, S.~U. Stich, and M.~Jaggi.
 		\newblock Decentralized stochastic optimization and gossip algorithms with compressed communication.
-		\newblock In Proceedings of the International Conference on Machine Learning (ICML), pp.~3478--3487, 2019.
+		\newblock In \emph{Proceedings of the International Conference on Machine Learning (ICML)}, pp.~3478--3487, 2019.
 		
-		\bibitem[Li and Lin(2024)]{li2024decentralized}
+		\bibitem[Li and Lin(2024)]{li2021decentralized}
 		H.~Li and Z.~Lin.
 		\newblock Accelerated gradient tracking over time-varying graphs for decentralized optimization.
-		\newblock Journal of Machine Learning Research, 25(274):1--52, 2024.
+		\newblock \emph{Journal of Machine Learning Research}, 25(51):1--55, 2024.
 		
 		\bibitem[Mokhtari et~al.(2016)Mokhtari, Shi, Ling, and Ribeiro]{mokhtari2016esom}
 		A.~Mokhtari, W.~Shi, Q.~Ling, and A.~Ribeiro.
 		\newblock {ESOM}: A second-order method for exact decentralized optimization over networks.
-		\newblock IEEE Transactions on Signal and Information Processing over Networks, 2(4):507--522, 2016.
+		\newblock \emph{IEEE Transactions on Signal and Information Processing over Networks}, 2(4):507--522, 2016.
 		
 		\bibitem[Pu and Nedi{\'c}(2021)]{pu2021distributed}
 		S.~Pu and A.~Nedi{\'c}.
 		\newblock Distributed stochastic gradient tracking methods.
-		\newblock Mathematical Programming, 187:409--457, 2021.
+		\newblock \emph{Mathematical Programming}, 187:409--457, 2021.
 		
-		\bibitem[Xin and Khan(2020)]{xin2020distributed}
+		\bibitem[Xin and Khan(2019)]{xin2019distributed}
 		R.~Xin and U.~A. Khan.
 		\newblock Distributed heavy-ball: a generalization and acceleration of first-order methods with gradient tracking.
-		\newblock IEEE Transactions on Automatic Control, 65(6):2627--2633, 2020.
+		\newblock \emph{IEEE Transactions on Automatic Control}, 65(6):2627--2633, 2019.
 		
-		\bibitem[Li et~al.(2020)Li, Cen, Chen, and others]{li2020communication}
-		B.~Li, S.~Cen, Y.~Chen, et~al.
-		\newblock Communication-efficient distributed optimization in networks with gradient tracking and variance reduction.
-		\newblock Journal of Machine Learning Research, 21(180):1--51, 2020.
-
-		\bibitem[Nesterov(2005)]{nesterov2005smooth}
-		Y.~Nesterov.
-		\newblock Smooth minimization of non-smooth functions.
-		\newblock Mathematical Programming, 103(1):127--152, 2005.
-
-		\bibitem[Charbonnier et~al.(1997)Charbonnier, Blanc-F{\'e}raud, Aubert, and Barlaud]{charbonnier1997huber}
-		P.~Charbonnier, L.~Blanc-F{\'e}raud, G.~Aubert, and M.~Barlaud.
-		\newblock Deterministic edge-preserving regularization in computed imaging.
-		\newblock IEEE Transactions on Image Processing, 6(2):298--311, 1997.
-
-		\bibitem[Rosenbrock(1960)]{rosenbrock1960automatic}
-		H.~H.~Rosenbrock.
-		\newblock An automatic method for finding the greatest or least value of a function.
-		\newblock The Computer Journal, 3(3):175--184, 1960.
-
-		\bibitem[Styblinski and Tang(1990)]{styblinski1990experiments}
-		M.~A.~Styblinski and T.~S.~Tang.
-		\newblock Experiments in nonconvex optimization: Stochastic approximation with function smoothing and simulated annealing.
-		\newblock Neural Networks, 3(4):467--483, 1990.
-
-		\bibitem[Geman and Yang(1995)]{geman1995nonlinear}
-		D.~Geman and C.~Yang.
-		\newblock Nonlinear image recovery with half-quadratic regularization.
-		\newblock IEEE Transactions on Image Processing, 4(7):932--946, 1995.
-
+		\bibitem[Zhang et~al.(2021)Zhang, Xiao, and Zhang]{zhang2021distributed}
+		J.~Zhang, H.~Xiao, and S.~Zhang.
+		\newblock Communication-efficient distributed optimization in networks with gradient tracking.
+		\newblock In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2021.
+		
 	\end{thebibliography}
 
 \appendix
@@ -2414,7 +2325,7 @@ This appendix develops the tracker-dispersion analysis in full detail,
 eliminating the non-vanishing heterogeneity constants present in prior
 work.
 The central idea is to bound tracker increments using Lipschitz
-continuity of differences
+continuity of \emph{differences}
 $\nabla F(X_{k+1})-\nabla F(X_k)$ and
 $\nabla^2F(X_{k+1})-\nabla^2F(X_k)$.
 
@@ -2459,6 +2370,46 @@ Divide by $\sqrt N$ to obtain the claim.
 
 \subsection{A uniform step bound}
 
+\begin{lemma}\label{lem:tilde_track_bounded}
+Assume Assumption~\ref{ass:standing} and $\tau_k,t_k\ge 1$ for all $k$.
+Then there exists a finite constant $B_G>0$ such that
+\[
+\sup_{k\ge 0} D(\tilde G_k)\le B_G,
+\]
+and consequently there exists a finite constant $G_g>0$ such that
+\[
+\sup_{k\ge 0}\max_{1\le i\le N}\|\tilde g_{i,k}\|\le G_g.
+\]
+\end{lemma}
+\begin{proof}
+From \eqref{eq:DG_rec_const} we have
+\[
+D(\tilde G_{k+1})\le \rho^{\tau_{k+1}}\rho^{t_k}\big(D(\tilde G_k)+2L_1D\big)\le \rho^2\big(D(\tilde G_k)+2L_1D\big),
+\]
+since $\tau_{k+1},t_k\ge 1$ and $\rho\in[0,1)$.
+Set $q:=\rho^2\in[0,1)$ and $b:=2L_1D$. Unrolling yields
+\[
+D(\tilde G_k)\le q^k D(\tilde G_0)+\frac{qb}{1-q}\quad\forall k\ge 0,
+\]
+so we may take $B_G:=D(\tilde G_0)+\frac{qb}{1-q}$.
+Next, Lemma~\ref{lem:avg-track-g} and the iterate boundedness from Lemma~\ref{lem:lyap_bound} imply that
+$\|\tilde{\bar g}_k\|=\|\bar g_k\|=\big\|\frac1N\sum_i \nabla f_i(x_{i,k})\big\|$ is uniformly bounded on the level set;
+let $G_{\mathrm{avg}}:=\sup_{k\ge 0}\|\tilde{\bar g}_k\|<\infty$.
+For any $i$,
+\[
+\|\tilde g_{i,k}\|\le \|\tilde{\bar g}_k\|+\|\tilde g_{i,k}-\tilde{\bar g}_k\|
+\le G_{\mathrm{avg}}+\sqrt N\,D(\tilde G_k)\le G_{\mathrm{avg}}+\sqrt N\,B_G.
+\]
+Thus we may take $G_g:=G_{\mathrm{avg}}+\sqrt N\,B_G$.
+\end{proof}
+
+For later reference, we record the uniform gradient bound established above:
+\begin{equation}\label{eq:step_unif_app}
+G_g:=\sup_{k\ge 0}\ \max_{1\le i\le N}\ \|\tilde g_{i,k}\| < \infty,
+\end{equation}
+where finiteness follows from Lemma~\ref{lem:tilde_track_bounded}.
+
+
 \begin{lemma}\label{lem:step_bound_app}
 For every $k\ge0$ and $i\in\{1,\dots,N\}$,
 \[
@@ -2494,6 +2445,50 @@ If $\tilde g_{i,k}=0$, then $s_{i,k}=0$ and the bound holds. Otherwise divide by
 For the second part, Lemma~\ref{lem:lyap_bound} gives $\|x_{i,k}\|\le \|x_\star\|+D$ and in particular
 $\|x_{i,k+1}-x_{i,k}\|\le \|x_{i,k+1}-x_\star\|+\|x_{i,k}-x_\star\|\le 2D$.
 Summing squares yields $\|X_{k+1}-X_k\|\le 2\sqrt N\,D$.
+\end{proof}
+
+\begin{lemma}\label{lem:DX_post}
+For all $k\ge 0$,
+\[
+D(X_{k+1})\le \rho^{t_k}\Big(D(\tilde X_k)+\frac{\|S_k\|}{\sqrt N}\Big).
+\]
+\end{lemma}
+\begin{proof}
+Recall $X_{k+1}=(W^{t_k}\otimes I_d)(\tilde X_k+S_k)$ and that $D(Z)=\|Z^\perp\|/\sqrt N$ with $Z^\perp:=((I-\J)\otimes I_d)Z$.
+Since $(W^{t_k}-\J)$ annihilates consensus components, we have
+\[
+(X_{k+1})^\perp = ((W^{t_k}-\J)\otimes I_d)(\tilde X_k+S_k),
+\]
+and by Lemma~\ref{lem:consensus} (applied in stacked form) and the triangle inequality,
+\[
+\| (X_{k+1})^\perp\|
+\le \rho^{t_k}\|(\tilde X_k+S_k)^\perp\|
+\le \rho^{t_k}\big(\|\tilde X_k^\perp\|+\|S_k^\perp\|\big)
+\le \rho^{t_k}\big(\|\tilde X_k^\perp\|+\|S_k\|\big).
+\]
+Divide by $\sqrt N$ to obtain the claim.
+\end{proof}
+
+\begin{lemma}\label{lem:DX_post_decay}
+Under Assumption~\ref{ass:standing} and schedule~\eqref{eq:log_schedule}, there exists a constant $C_X^{+}>0$ such that for all $k\ge 0$,
+\[
+D(X_k)\le \frac{C_X^{+}}{(k+1)^{p}}.
+\]
+\end{lemma}
+\begin{proof}
+From Lemma~\ref{lem:DX_post} and $\rho^{t_k}\le (k+2)^{-p}$ under \eqref{eq:log_schedule}, it remains to bound
+$D(\tilde X_k)$ and $\|S_k\|/\sqrt N$ uniformly.
+By Lemma~\ref{lem:lyap_bound}, each $\tilde x_{i,k}$ is a convex combination of $\{x_{j,k}\}$, hence $\|\tilde x_{i,k}-x_\star\|\le D$ and
+\[
+D(\tilde X_k)\le \max_{1\le i\le N}\|\tilde x_{i,k}-\bar x_k\|
+\le \max_i \|\tilde x_{i,k}-x_\star\|+\|\bar x_k-x_\star\|\le 2D.
+\]
+Moreover, Lemma~\ref{lem:step_bound_app} yields $\|S_k\|/\sqrt N\le \sqrt{G_g/M}$, where $G_g$ is defined in \eqref{eq:step_unif_app}.
+Therefore,
+\[
+D(X_{k+1})\le (k+2)^{-p}\Big(2D+\sqrt{\frac{G_g}{M}}\Big),
+\]
+and the claim follows with $C_X^{+}:=2D+\sqrt{G_g/M}$ after shifting indices.
 \end{proof}
 
 \subsection{Primal dispersion recursion (explicit)}
@@ -2588,7 +2583,7 @@ D(\tilde G_{k+1})
 \underbrace{\tfrac1{\sqrt N}\|(\Pmat\!\otimes\! I_d)\tilde G_k\|}_{=D(\tilde G_k)}\\
 &\qquad+\tfrac1{\sqrt N}\|\Delta\nabla F_k\|\bigr),
 \end{align*}
-where we used $\|((\Pmat)\otimes I_d)u\|\le \|u\|$.
+where we used $\|((\Pmat)\otimes I)u\|\le \|u\|$.
 It remains to bound $\|\Delta\nabla F_k\|$.
 By block structure,
 \begin{align*}
@@ -2647,7 +2642,7 @@ D(\mathcal H_{k+1})
 Combine the last two displays to get \eqref{eq:DH_rec} once we bound $\|\Delta\nabla^2F_k\|_F$.
 By block structure and the inequality $\|A\|_F\le \sqrt d\,\|A\|_2$,
 \begin{align*}
-\|\Delta\nabla^2 F_k\|_F^2
+&\|\Delta\nabla^2 F_k\|_F^2\\
 &=\textstyle\sum_{i=1}^N\|\nabla^2 f_i(x_{i,k+1})\!-\!\nabla^2 f_i(x_{i,k})\|_F^2\\
 &\le \textstyle\sum_{i=1}^N d\,\|\nabla^2 f_i(x_{i,k+1})\!-\!\nabla^2 f_i(x_{i,k})\|_2^2.
 \end{align*}
@@ -2663,135 +2658,6 @@ hence
 \end{align*}
 Taking square roots gives $\|\Delta\nabla^2 F_k\|_F\le \sqrt d\,L_2\,\|X_{k+1}-X_k\|$,
 which yields \eqref{eq:DH_rec}. Finally use Lemma~\ref{lem:step_bound_app} to obtain \eqref{eq:DH_rec_const}.
-\end{proof}
-
-\subsection{Uniform tracker bounds and post-mixing primal decay}
-
-\begin{lemma}\label{lem:tilde_track_bounded}
-Assume Assumption~\ref{ass:standing} and $\tau_k,t_k\ge 1$ for all $k$.
-Then there exists a finite constant $B_G>0$ such that
-\[
-\sup_{k\ge 0} D(\tilde G_k)\le B_G,
-\]
-and consequently there exists a finite constant $G_g>0$ such that
-\[
-\sup_{k\ge 0}\max_{1\le i\le N}\|\tilde g_{i,k}\|\le G_g.
-\]
-\end{lemma}
-\begin{proof}
-From \eqref{eq:DG_rec_const} we have
-\[
-D(\tilde G_{k+1})\le \rho^{\tau_{k+1}}\rho^{t_k}\big(D(\tilde G_k)+2L_1D\big)\le \rho^2\big(D(\tilde G_k)+2L_1D\big),
-\]
-since $\tau_{k+1},t_k\ge 1$ and $\rho\in[0,1)$.
-Set $q:=\rho^2\in[0,1)$ and $b:=2L_1D$. Unrolling yields
-\[
-D(\tilde G_k)\le q^k D(\tilde G_0)+\frac{qb}{1-q}\quad\forall k\ge 0,
-\]
-so we may take $B_G:=D(\tilde G_0)+\frac{qb}{1-q}$.
-Next, Lemma~\ref{lem:avg-track-g} and the iterate boundedness from Lemma~\ref{lem:lyap_bound} imply that
-$\|\tilde{\bar g}_k\|=\|\bar g_k\|=\big\|\frac1N\sum_i \nabla f_i(x_{i,k})\big\|$ is uniformly bounded on the level set;
-let $G_{\mathrm{avg}}:=\sup_{k\ge 0}\|\tilde{\bar g}_k\|<\infty$.
-For any $i$,
-\[
-\|\tilde g_{i,k}\|\le \|\tilde{\bar g}_k\|+\|\tilde g_{i,k}-\tilde{\bar g}_k\|
-\le G_{\mathrm{avg}}+\sqrt N\,D(\tilde G_k)\le G_{\mathrm{avg}}+\sqrt N\,B_G.
-\]
-Thus we may take $G_g:=G_{\mathrm{avg}}+\sqrt N\,B_G$.
-\end{proof}
-
-For later reference, we record the uniform gradient bound from Lemma~\ref{lem:tilde_track_bounded}:
-\begin{equation}\label{eq:step_unif_app}
-G_g:=\sup_{k\ge 0}\ \max_{1\le i\le N}\ \|\tilde g_{i,k}\| < \infty,
-\end{equation}
-where finiteness follows from Lemma~\ref{lem:tilde_track_bounded}.
-
-\begin{lemma}\label{lem:tilde_hess_bounded}
-Assume Assumption~\ref{ass:standing} and that $\tau_k,t_k\ge 1$ for all $k$.
-Then there exists a finite constant $B_H>0$ such that
-\[
-\sup_{k\ge 0} D(\tilde{\mathcal H}_k)\le B_H.
-\]
-Consequently, there exists a finite constant $G_H>0$ such that
-\[
-\sup_{k\ge 0}\max_{1\le i\le N}\big\|\tilde H_{i,k}\big\|_2 \le G_H,
-\qquad
-\sup_{k\ge 0}\bar\delta_k \le G_H.
-\]
-\end{lemma}
-
-\begin{proof}
-From Lemma~\ref{lem:DH_rec} and $\tau_{k+1},t_k\ge 1$, we have
-\[
-D(\tilde{\mathcal H}_{k+1})
-\le \rho^{\tau_{k+1}}\rho^{t_k}\Big(D(\tilde{\mathcal H}_k)+2\sqrt d\,L_2D\Big)
-\le \rho^2\Big(D(\tilde{\mathcal H}_k)+2\sqrt d\,L_2D\Big).
-\]
-Let $q:=\rho^2\in[0,1)$ and $b_H:=2\sqrt d\,L_2D$. Unrolling yields
-\[
-D(\tilde{\mathcal H}_k)\le q^k D(\tilde{\mathcal H}_0)+\frac{qb_H}{1-q}\quad \forall k\ge 0,
-\]
-so we may take $B_H:=D(\tilde{\mathcal H}_0)+qb_H/(1-q)$.
-
-Next, by Lemma~\ref{lem:avg-track-h},
-$\tilde{\bar H}_k=\bar H_k=\frac1N\sum_{i=1}^N\nabla^2 f_i(x_{i,k})$,
-hence $\|\tilde{\bar H}_k\|_2\le M_{H,\max}$.
-For any $i$,
-\[
-\|\tilde H_{i,k}\|_2
-\le \|\tilde{\bar H}_k\|_2
-+ \|\tilde H_{i,k}\!-\!\tilde{\bar H}_k\|_2
-\le M_{H,\max}\!+\!\sqrt{N}\,B_H.
-\]
-Define $G_H:=M_{H,\max} + \sqrt{N}\,B_H$.
-
-Finally, $\delta_{i,k}=\max\{0,-\lambda_{\min}(\tilde H_{i,k})\}
-\le \|\tilde H_{i,k}\|_2\le G_H$,
-and averaging yields $\bar\delta_k\le G_H$.
-\end{proof}
-
-\begin{lemma}\label{lem:DX_post}
-For all $k\ge 0$,
-\[
-D(X_{k+1})\le \rho^{t_k}\Big(D(\tilde X_k)+\frac{\|S_k\|}{\sqrt N}\Big).
-\]
-\end{lemma}
-\begin{proof}
-Recall $X_{k+1}=(W^{t_k}\otimes I_d)(\tilde X_k+S_k)$ and that $D(Z)=\|Z^\perp\|/\sqrt N$ with $Z^\perp:=((I-\J)\otimes I_d)Z$.
-Since $(W^{t_k}-\J)$ annihilates consensus components, we have
-\[
-(X_{k+1})^\perp = ((W^{t_k}-\J)\otimes I_d)(\tilde X_k+S_k),
-\]
-and by Lemma~\ref{lem:consensus} (applied in stacked form) and the triangle inequality,
-\[
-\| (X_{k+1})^\perp\|
-\le \rho^{t_k}\|(\tilde X_k+S_k)^\perp\|
-\le \rho^{t_k}\big(\|\tilde X_k^\perp\|+\|S_k^\perp\|\big)
-\le \rho^{t_k}\big(\|\tilde X_k^\perp\|+\|S_k\|\big).
-\]
-Divide by $\sqrt N$ to obtain the claim.
-\end{proof}
-
-\begin{lemma}\label{lem:DX_post_decay}
-Under Assumption~\ref{ass:standing} and schedule~\eqref{eq:log_schedule}, there exists a constant $C_X^{+}>0$ such that for all $k\ge 0$,
-\[
-D(X_k)\le \frac{C_X^{+}}{(k+1)^{p}}.
-\]
-\end{lemma}
-\begin{proof}
-From Lemma~\ref{lem:DX_post} and $\rho^{t_k}\le (k+2)^{-p}$ under \eqref{eq:log_schedule}, it remains to bound
-$D(\tilde X_k)$ and $\|S_k\|/\sqrt N$ uniformly.
-By Lemma~\ref{lem:lyap_bound}, each $\tilde x_{i,k}$ is a convex combination of $\{x_{j,k}\}$, hence $\|\tilde x_{i,k}-x_\star\|\le D$ and
-\[
-D(\tilde X_k)\le \max_{1\le i\le N}\|\tilde x_{i,k}-\bar x_k\|
-\le \max_i \|\tilde x_{i,k}-x_\star\|+\|\bar x_k-x_\star\|\le 2D.
-\]
-Moreover, Lemma~\ref{lem:step_bound_app} yields $\|S_k\|/\sqrt N\le \sqrt{G_g/M}$, where $G_g$ is defined in \eqref{eq:step_unif_app}.
-Therefore,
-\[
-D(X_{k+1})\le (k+2)^{-p}\Big(2D+\sqrt{\frac{G_g}{M}}\Big),
-\]
-and the claim follows with $C_X^{+}:=2D+\sqrt{G_g/M}$ after shifting indices.
 \end{proof}
 
 \subsection{Polynomial decay under a logarithmic schedule}
@@ -2812,14 +2678,11 @@ Since $a_k\le q<1$, we have $u_{k+1}\le q(u_k+b)$ and hence by induction
 \[
 u_k\le q^k u_0+\sum_{j=0}^{k-1} q^{k-j}qb \le u_0+\frac{qb}{1-q}=:u_{\max}\quad \forall k\ge 0.
 \]
-Using also $a_k\le (k+2)^{-p}$, it follows that for every $k\ge 0$,
+Using also $a_k\le (k+2)^{-p}$, it follows that
 \[
-u_{k+1}\le a_k(u_k+b)\le \frac{u_{\max}+b}{(k+2)^{p}}\le \frac{u_{\max}+b}{(k+2)^{p-1}}.
+u_{k+1}\le a_k(u_k+b)\le (k+2)^{-p}(u_{\max}+b)\le (k+2)^{-(p-1)}(u_{\max}+b),
 \]
-Since $(k+3)/(k+2)\le 2$ for all $k\ge 0$, we obtain
-$u_{k+1}\le 2^{p-1}(u_{\max}+b)/(k+3)^{p-1}$.
-For $k=0$, the base case $u_0\le u_{\max}\le C/2^{p-1}$ holds by definition.
-The claim follows with $C:=2^{p-1}(u_{\max}+b)$.
+which proves the claim with $C:=u_{\max}+b$.
 \end{proof}
 
 \begin{proposition}\label{prop:dispersion_decay}
@@ -2870,7 +2733,7 @@ all three conditions of Proposition~\ref{prop:inexact-rn} hold.
 
 \smallskip
 \noindent\textbf{Step 1: post-mixing disagreement and bridge terms.}
-Recall $D(X_k)=\|X_k^\perp\|/\sqrt N$.
+Recall $D(X_k)=\|X_k^\perp\|/\sqrt N = D(X_k)$.
 By Lemma~\ref{lem:DX_post_decay}, there exists $C_X^{+}>0$ such that for all $k\ge 0$,
 \begin{equation}\label{eq:DX_post_decay_app}
 D(X_k)\le \frac{C_X^{+}}{(k+1)^p}.
@@ -2923,7 +2786,7 @@ Moreover, since $A_k^{\mathrm{ref}}\preceq (M_{H,\max}+\tilde{\bar\lambda}_k)I$,
 \ge \frac{\varepsilon/2}{M_{H,\max}+\sqrt{MG_g}+G_H}
 =:\underline s(\varepsilon),
 \]
-where we used $\tilde{\bar\lambda}_k=\frac{1}{N}\sum_i(\lambda_{i,k}+\delta_{i,k})\le \sqrt{MG_g}+G_H$, with $G_g$ from~\eqref{eq:step_unif_app} and $G_H$ from Lemma~\ref{lem:tilde_hess_bounded}.
+where we used $\tilde{\bar\lambda}_k=\frac{1}{N}\sum_i(\lambda_{i,k}+\delta_{i,k})\le \sqrt{MG_g}+G_H$, with $G_g$ from Lemma~\ref{lem:step_bound_app} and $G_H$ from Lemma~\ref{lem:tilde_hess_bounded}.
 
 \smallskip
 \noindent\textbf{Step 4: ensure dispersion control (Item~1).}
@@ -2960,7 +2823,7 @@ L_2D(X_k)\le \frac{\eta}{8}\lambda_k.
 By \eqref{eq:bridge_targets_app} and $\|s_k^{\mathrm{ref}}\|\ge \underline s(\varepsilon)$, there exists $K_2(\varepsilon)$ such that both inequalities hold for all $k\ge K_2(\varepsilon)$.
 
 \smallskip
-\noindent\textbf{Step 6: ensure $\Delta_k^g\le \varepsilon$.}
+\noindent\textbf{Step X: ensure $\Delta_k^g\le \varepsilon$.}
 By \eqref{eq:Delta_decay_app}, $\Delta_k^g\le \frac{C_G}{(k+2)^{p-1}}$.
 Define
 \[
@@ -2969,7 +2832,7 @@ K_\Delta(\varepsilon):=\min\Big\{k\ge 0:\ \frac{C_G}{(k+2)^{p-1}}\le \varepsilon
 Then for all $k\ge K_\Delta(\varepsilon)$, we have $\Delta_k^g\le \varepsilon$.
 
 \smallskip
-\noindent\textbf{Step 7: ensure $\bar\delta_k\le \sqrt{\varepsilon}$.}
+\noindent\textbf{Step Y: ensure $\bar\delta_k\le \sqrt{\varepsilon}$ (convex case).}
 By Lemma~\ref{lem:delta_control}, we have for all $k$,
 \[
 \bar\delta_k\le \Delta_k^H + L_2D(X_k).
@@ -3020,7 +2883,7 @@ K_0(\varepsilon)=\cO\!\big(\varepsilon^{-1/(2(p-1))}\big).
 Since $p>2$ in the standing logarithmic schedule, we have $p-1>1$
 and hence $1/(2(p-1))<1/2<1$.
 In particular, $K_0(\varepsilon)=o(\varepsilon^{-1})$ and therefore
-does not dominate the $\cO(\varepsilon^{-1})$ post-burn-in term.
+\emph{does not dominate} the $\cO(\varepsilon^{-1})$ post-burn-in term.
 The total iteration complexity in Theorem~\ref{thm:main}
 (and communication complexity in Theorem~\ref{thm:comm}) has the
 post-burn-in phase as its leading term:
@@ -3051,15 +2914,15 @@ the burn-in remains a lower-order term.
 % ── Lyapunov boundedness (full proof) ───────────────────────────
 \begin{proof}[Proof of Lemma~\ref{lem:lyap_bound}]
 We establish iterate boundedness through a self-contained
-invariant-set construction that avoids any circular dependence
+\emph{invariant-set construction} that avoids any circular dependence
 on the quantity $D$ being proved finite.
 
 \smallskip
 \noindent\textbf{Step 1: parameterized constants on compact sets.}
 For any radius $R>0$, the sublevel set
 $S(R):=\{x:\,f(x)\le f_\star+R\}$
-is compact by coercivity (Assumption~\ref{ass:standing}(3)).
-Define the $R$-dependent boundedness constants:
+is \emph{compact} by coercivity (Assumption~\ref{ass:standing}(3)).
+Define the \emph{$R$-dependent} boundedness constants:
 \begin{gather*}
   M_H(R):=\sup_{x\in S(R)}\max_i\|\nabla^2 f_i(x)\|_2,\\
   G_\nabla(R):=\sup_{x\in S(R)}\|\nabla f(x)\|.
@@ -3089,7 +2952,7 @@ enough to make $\mathcal S$ forward-invariant.
 \noindent\textbf{Step 3: one-step function-value bound (no descent required).}
 Suppose the current state lies in $\mathcal S(R,B_X,B_G)$.
 Every local step satisfies $\|s_{i,k}\|\le\sqrt{\|\tilde g_{i,k}\|/M}$
-by Lemma~\ref{lem:M-vs-s}; this bound holds unconditionally
+by Lemma~\ref{lem:M-vs-s}; this bound holds \emph{unconditionally}
 and does not require the inexact Newton condition.
 By $\bar x_{k+1}=\bar x_k+\bar s_k$ (Lemma~\ref{lem:avg-pres}) and
 $L_1$-smoothness (Assumption~\ref{ass:standing}(1)),
@@ -3101,24 +2964,18 @@ $L_1$-smoothness (Assumption~\ref{ass:standing}(1)),
 \]
 From the local solve (Lemma~\ref{lem:M-vs-s}),
 $\|s_{i,k}\|\le\sqrt{\|\tilde g_{i,k}\|/M}$ unconditionally.
-On the invariant set $\mathcal S$,
-$f(\bar x_k)\le f_\star+R$ implies $\bar x_k\in S(R)$, and
-$D(X_k)\le B_X$ implies $\|x_{i,k}-x_\star\|\le D_S(R)+\sqrt{N}B_X$.
-Since each $f_i$ has $L_1$-Lipschitz gradient,
-$\|\nabla f_i(x_{i,k})\|\le G_\nabla^{(i)}(R,B_X)<\infty$
-where $G_\nabla^{(i)}(R,B_X):=\sup\{\|\nabla f_i(x)\|:\|x-x_\star\|\le D_S(R)+\sqrt{N}B_X\}$.
-By Lemma~\ref{lem:avg-track-g},
-$\|\tilde{\bar g}_k\|=\|\frac1N\sum_i\nabla f_i(x_{i,k})\|
-\le \frac1N\sum_i\|\nabla f_i(x_{i,k})\|\le \max_i G_\nabla^{(i)}=:G_\nabla(R,B_X)$,
+On the invariant set $\mathcal S$, the average-preservation identity
+(Lemma~\ref{lem:avg-track-g}) gives
+$\|\tilde{\bar g}_k\|=\|\nabla f(\bar x_k)\|\le G_\nabla(R)$,
 and the gradient-tracker dispersion budget yields
 $\|\tilde g_{i,k}\|\le \|\tilde{\bar g}_k\|+\sqrt{N}\,D(\tilde G_k)
-\le G_\nabla(R,B_X)+\sqrt{N}\,B_G=:G_g(R,B_X,B_G)<\infty$.
+\le G_\nabla(R)+\sqrt{N}\,B_G=:G_g(R,B_G)<\infty$.
 Consequently $\|\bar s_k\|\le\frac{1}{N}\sum_i\|s_{i,k}\|
 \le\sqrt{G_g/M}$.
 All quantities entering $G_g$ depend only on $R$ (through the
 sublevel set $S(R)$) and the dispersion budgets $B_X,B_G$;
 in particular, the iterate-diameter constant $D$ being established
-does not appear, so no circularity arises.
+does \emph{not} appear, so no circularity arises.
 Thus
 \begin{equation}\label{eq:rphi_R}
   f(\bar x_{k+1})-f(\bar x_k)
@@ -3126,14 +2983,14 @@ Thus
   G_\nabla(R)\sqrt{\frac{G_g}{M}}+\frac{L_1}{2}\frac{G_g}{M}
   \;=:\; R_\Phi(R,B_X,B_G) \;<\;\infty.
 \end{equation}
-We emphasize that this is a one-step upper bound, not a descent
-guarantee; we do not require $R_\Phi\le 0$.
+We emphasize that this is a \emph{one-step upper bound}, not a descent
+guarantee; we do \emph{not} require $R_\Phi\le 0$.
 
 \smallskip
 \noindent\textbf{Step 4: dispersion recursions.}
 With $\tau_k,t_k\ge1$ and $q:=\rho^2\in[0,1)$:
 
-Primal dispersion (Lemma~\ref{lem:DX_rec} combined with the
+\emph{Primal dispersion} (Lemma~\ref{lem:DX_rec} combined with the
 pre-mixing contraction $D(\tilde X_k)\le \rho^{\tau_k}D(X_k)$ and the
 step bound $\|S_k\|/\sqrt{N}\le \sqrt{G_g/M}$ from
 Lemma~\ref{lem:step_bound_app}):
@@ -3143,7 +3000,7 @@ Lemma~\ref{lem:step_bound_app}):
   \;\le\; q^2 D(X_k)^2 + 2q^{3/2}D(X_k)\sqrt{\tfrac{G_g}{M}}+q\tfrac{G_g}{M}.
 \]
 
-Gradient-tracker dispersion (Lemma~\ref{lem:DG_rec}
+\emph{Gradient-tracker dispersion} (Lemma~\ref{lem:DG_rec}
 and $\|\nabla^2 f_i(x_{i,k})\|_2\le M_H(R)$ on the compact set):
 \begin{align*}
   D(\tilde G_{k+1})^2
@@ -3152,7 +3009,7 @@ and $\|\nabla^2 f_i(x_{i,k})\|_2\le M_H(R)$ on the compact set):
   &\;+ 4q^2 M_H(R)^2(D_S(R){+}\sqrt{N}B_X)^2.
 \end{align*}
 
-\noindent\textbf{Step 4a: steady-state dispersion bounds.}
+\emph{Steady-state dispersion bounds.}
 Set $B_X$ and $B_G$ as the unique positive solutions of
 $B_X^2 = q^2 B_X^2 + 2q^{3/2}B_X\sqrt{G_g/M}+q\,G_g/M$
 and the analogous equation for $B_G$; explicitly,
@@ -3179,7 +3036,7 @@ with
   c_2 := \frac{R_\Phi(R)}{(1-q^2)\,B_G^2}.
 \]
 Combining the per-step bounds from Steps~3--4 and applying Young's
-inequality to the cross terms (see the Young-inequality bounds in the next display), one verifies
+inequality to the cross terms (details below), one verifies
 \begin{equation}\label{eq:lyap_descent_full}
   \mathcal L_{k+1}
   \;\le\;
@@ -3240,7 +3097,7 @@ Combining the bounds,
   \;=\; \mathcal L_k.
 \]
 
-\noindent\textbf{Step 5a: closing the invariance.}
+\emph{Closing the invariance.}
 Choose $R$ large enough so that
 $\mathcal L_0\le R$,
 $D(X_0)\le B_X(R)$, and
@@ -3273,6 +3130,51 @@ and hence
 Pre-mixed iterates $\tilde x_{i,k}$ are convex combinations of
 $\{x_{j,k}\}$ and thus satisfy the same bound.
 This establishes~\eqref{eq:bounded_levelset} and completes the proof.
+\end{proof}
+
+% ── Tracker spectral-norm boundedness (needed for burn-in / delta) ──
+\begin{lemma}\label{lem:tilde_hess_bounded}
+Assume Assumption~\ref{ass:standing} and that $\tau_k,t_k\ge 1$ for all $k$.
+Then there exists a finite constant $B_H>0$ such that
+\[
+\sup_{k\ge 0} D(\tilde{\mathcal H}_k)\le B_H.
+\]
+Consequently, there exists a finite constant $G_H>0$ such that
+\[
+\sup_{k\ge 0}\max_{1\le i\le N}\big\|\tilde H_{i,k}\big\|_2 \le G_H,
+\qquad
+\sup_{k\ge 0}\bar\delta_k \le G_H.
+\]
+\end{lemma}
+
+\begin{proof}
+From Lemma~\ref{lem:DH_rec} and $\tau_{k+1},t_k\ge 1$, we have
+\[
+D(\tilde{\mathcal H}_{k+1})
+\le \rho^{\tau_{k+1}}\rho^{t_k}\Big(D(\tilde{\mathcal H}_k)+2\sqrt d\,L_2D\Big)
+\le \rho^2\Big(D(\tilde{\mathcal H}_k)+2\sqrt d\,L_2D\Big).
+\]
+Let $q:=\rho^2\in[0,1)$ and $b_H:=2\sqrt d\,L_2D$. Unrolling yields
+\[
+D(\tilde{\mathcal H}_k)\le q^k D(\tilde{\mathcal H}_0)+\frac{qb_H}{1-q}\quad \forall k\ge 0,
+\]
+so we may take $B_H:=D(\tilde{\mathcal H}_0)+qb_H/(1-q)$.
+
+Next, by Lemma~\ref{lem:avg-track-h},
+$\tilde{\bar H}_k=\bar H_k=\frac1N\sum_{i=1}^N\nabla^2 f_i(x_{i,k})$,
+hence $\|\tilde{\bar H}_k\|_2\le M_{H,\max}$.
+For any $i$,
+\[
+\|\tilde H_{i,k}\|_2
+\le \|\tilde{\bar H}_k\|_2\\
+\quad + \|\tilde H_{i,k}\!-\!\tilde{\bar H}_k\|_2
+\le M_{H,\max}\!+\!\sqrt{N}\,B_H.
+\]
+Define $G_H:=M_{H,\max} + \sqrt{N}\,B_H$.
+
+Finally, $\delta_{i,k}=\max\{0,-\lambda_{\min}(\tilde H_{i,k})\}
+\le \|\tilde H_{i,k}\|_2\le G_H$,
+and averaging yields $\bar\delta_k\le G_H$.
 \end{proof}
 
 \begin{proof}[Proof of Lemma~\ref{lem:taylor3}]
@@ -3474,7 +3376,7 @@ Then
 \le \underbrace{\frac1N\sum_i|\lambda_{i,k}-\bar\lambda_k|}_{=:T_1}
 +\underbrace{\frac1N\sum_i|\delta_{i,k}-\bar\delta_k|}_{=:T_2}.
 \]
-\textbf{Step 1: bound $T_2$.}
+\emph{Step 1: bound $T_2$.}
 Since $\delta_{i,k}\ge0$, a standard counting argument yields
 \[
 \sum_{i=1}^N|\delta_{i,k}-\bar\delta_k|
@@ -3484,7 +3386,7 @@ Since $\delta_{i,k}\ge0$, a standard counting argument yields
 \]
 so $T_2\le 2\bar\delta_k$.
 
-\textbf{Step 2: bound $T_1$.}
+\emph{Step 2: bound $T_1$.}
 For any scalars $\{u_i\}$ with $\bar u=\frac1N\sum_i u_i$,
 $|u_i-\bar u|=\big|\frac1N\sum_j(u_i-u_j)\big|\le \frac1N\sum_j|u_i-u_j|$.
 Averaging over $i$ gives
@@ -3537,12 +3439,12 @@ r_k=(\nabla^2 f(\bar x_k)+\lambda_k I)(\bar s_k-s_k^{\mathrm{ref}})
 +(\nabla^2 f(\bar x_k)-\tilde{\bar H}_k)s_k^{\mathrm{ref}}+(g_k-\tilde{\bar g}_k).
 \]
 Take norms:
-\begin{align*}
+\[
 \|r_k\|
-&\le \|\nabla^2 f(\bar x_k)\!+\!\lambda_k I\|_2\|\bar s_k\!-\!s_k^{\mathrm{ref}}\|\\
-&\quad+\|\nabla^2 f(\bar x_k)\!-\!\tilde{\bar H}_k\|_2\|s_k^{\mathrm{ref}}\|
+\le \|\nabla^2 f(\bar x_k)\!+\!\lambda_k I\|_2\|\bar s_k\!-\!s_k^{\mathrm{ref}}\|\\
++\|\nabla^2 f(\bar x_k)\!-\!\tilde{\bar H}_k\|_2\|s_k^{\mathrm{ref}}\|
 +\|g_k\!-\!\tilde{\bar g}_k\|.
-\end{align*}
+\]
 By \eqref{eq:MHmax_def}, $\|\nabla^2 f(\bar x_k)\|_2\le M_{H,\max}$ on the bounded level set, hence
 $\|\nabla^2 f(\bar x_k)+\lambda_k I\|_2\le M_{H,\max}+\lambda_k$.
 Using item (1),
@@ -3674,34 +3576,34 @@ Therefore,
 \]
 Finally, convexity and the bounded level set imply $\Phi_k\le \ip{g_k}{\bar x_k-x_\star}\le D\|g_k\|$, hence
 $\|g_k\|^{3/2}\ge D^{-3/2}\Phi_k^{3/2}$.
-Collect constants into $\nu$.
+Collect constants into $\tau$.
 \end{proof}
 
 \begin{proof}[Proof of Lemma~\ref{lem:solve32}]
 If $\Phi_k=0$ for some $k$, then $\Phi_{k'}=0$ for all $k'\ge k$ and the claim is trivial.
 Assume $\Phi_k>0$ for all $k$.
 
-From $\Phi_{k+1}\le \Phi_k-\nu \Phi_k^{3/2}=\Phi_k(1-\nu\sqrt{\Phi_k})$, we consider two cases.
+From $\Phi_{k+1}\le \Phi_k-\tau \Phi_k^{3/2}=\Phi_k(1-\tau\sqrt{\Phi_k})$, we consider two cases.
 
-Case 1: $\nu\sqrt{\Phi_k}\ge 1$.
+\emph{Case 1: $\tau\sqrt{\Phi_k}\ge 1$.}
 Then $\Phi_{k+1}\le 0$. Since $\Phi_{k+1}\ge 0$, we must have $\Phi_{k+1}=0$,
 contradicting $\Phi_{k+1}>0$.
-Hence this case cannot occur under the assumption $\Phi_k>0$.
+Hence this case cannot occur under the standing assumption $\Phi_k>0$.
 
-Therefore, necessarily $\nu\sqrt{\Phi_k}\in(0,1)$ for all $k$.
+Therefore, necessarily $\tau\sqrt{\Phi_k}\in(0,1)$ for all $k$.
 
 Let $\psi_k:=\Phi_k^{-1/2}$. Then
-\begin{align*}
-\psi_{k+1}&=\Phi_{k+1}^{-1/2}\ge \Phi_k^{-1/2}(1\!-\!\nu\sqrt{\Phi_k})^{-1/2}\\
-&=\psi_k(1\!-\!u_k)^{-1/2},\quad u_k:=\nu\sqrt{\Phi_k}\in(0,1).
-\end{align*}
+\[
+\psi_{k+1}=\Phi_{k+1}^{-1/2}\ge \Phi_k^{-1/2}(1\!-\!\tau\sqrt{\Phi_k})^{-1/2}\\
+=\psi_k(1\!-\!u_k)^{-1/2},\; u_k:=\tau\sqrt{\Phi_k}\in(0,1).
+\]
 Using convexity of $(1-u)^{-1/2}$ on $[0,1)$ and $(1-u)^{-1/2}\ge 1+\frac12u$, we obtain
 \[
-\psi_{k+1}\ge \psi_k\Big(1+\frac12 u_k\Big)=\psi_k+\frac{\nu}{2}.
+\psi_{k+1}\ge \psi_k\Big(1+\frac12 u_k\Big)=\psi_k+\frac{\tau}{2}.
 \]
-Thus $\psi_k\ge \psi_0+\frac{\nu}{2}k\ge \frac{\nu}{2}(k+2)$ after adjusting constants, and hence
+Thus $\psi_k\ge \psi_0+\frac{\tau}{2}k\ge \frac{\tau}{2}(k+2)$ after adjusting constants, and hence
 \[
-\Phi_k=\psi_k^{-2}\le \frac{4}{\nu^2(k+2)^2}.
+\Phi_k=\psi_k^{-2}\le \frac{4}{\tau^2(k+2)^2}.
 \]
 \end{proof}
 
@@ -3719,14 +3621,14 @@ index shift is absorbed into the final constant $C_K$ in the
 theorem statement.
 
 \smallskip
-\noindent\textbf{Step 0: $\Phi_k$ is nonincreasing (for $k\ge K_0$ with $\|g_k\|\ge\varepsilon$).}
-By Proposition~\ref{prop:burnin}, the hypotheses of Lemma~\ref{lem:descent} hold at every iteration $k\ge K_0$ satisfying $\|g_k\|\ge\varepsilon$.
+\noindent\textbf{Step 0: $\Phi_k$ is nonincreasing (for $k\ge K_0$).}
+By Proposition~\ref{prop:inexact-rn}, the hypotheses of Lemma~\ref{lem:descent} hold at every iteration $k\ge K_0$.
 Hence, with $c_d:=1-\eta-\frac16>0$,
 \begin{equation}\label{eq:Phi_monotone}
 \Phi_{k+1}\le \Phi_k - c_d\,\lambda_k\|\bar s_k\|^2\le \Phi_k,
-\qquad \forall k\ge K_0 \text{ with } \|g_k\|\ge\varepsilon.
+\qquad \forall k\ge K_0.
 \end{equation}
-Since we seek the first $k$ with $\|g_k\|\le\varepsilon$, descent applies at every step of interest.
+In particular, $\{\Phi_k\}_{k\ge K_0}$ is nonincreasing.
 
 \smallskip
 \noindent\textbf{Step 1: a uniform gradient growth bound.}
@@ -3771,23 +3673,23 @@ List these indices increasingly as $0\le i_0<i_1<\cdots<i_{n_k-1}\le k-1$ (if $n
 Define the subsequence $u_j:=\Phi_{i_j}$.
 By Lemma~\ref{lem:steady}, for each steady index $i_j\in\mathcal I$,
 \[
-\Phi_{i_j}-\Phi_{i_j+1}\ge \nu\,\Phi_{i_j}^{3/2}=\nu\,u_j^{3/2}.
+\Phi_{i_j}-\Phi_{i_j+1}\ge \tau\,\Phi_{i_j}^{3/2}=\tau\,u_j^{3/2}.
 \]
 Using monotonicity \eqref{eq:Phi_monotone}, we have $\Phi_{i_{j+1}}\le \Phi_{i_j+1}$.
 Therefore,
 \[
 u_{j+1}=\Phi_{i_{j+1}}
 \le \Phi_{i_j+1}
-\le \Phi_{i_j}-\nu\,\Phi_{i_j}^{3/2}
-= u_j-\nu\,u_j^{3/2}.
+\le \Phi_{i_j}-\tau\,\Phi_{i_j}^{3/2}
+= u_j-\tau\,u_j^{3/2}.
 \]
 Applying Lemma~\ref{lem:solve32} to $\{u_j\}$ yields
 \begin{equation}\label{eq:u_bound}
-u_j\le \frac{4}{\nu^2(j+2)^2},\qquad \forall j\ge 0.
+u_j\le \frac{4}{\tau^2(j+2)^2},\qquad \forall j\ge 0.
 \end{equation}
 Since $\Phi_k\le \Phi_{i_{n_k-1}}=u_{n_k-1}$ by monotonicity, we obtain
 \begin{equation}\label{eq:Phi_by_nk}
-\Phi_k\le \frac{4}{\nu^2(n_k+1)^2}\le \frac{4}{\nu^2(n_k+2)^2},
+\Phi_k\le \frac{4}{\tau^2(n_k+1)^2}\le \frac{4}{\tau^2(n_k+2)^2},
 \qquad \forall k\ge 1.
 \end{equation}
 
@@ -3796,13 +3698,13 @@ Since $\Phi_k\le \Phi_{i_{n_k-1}}=u_{n_k-1}$ by monotonicity, we obtain
 Let $m_k:=|\mathcal S\cap\{0,1,\dots,k-1\}|=k-n_k$.
 We consider two cases.
 
-Case 1: $n_k\ge k/2$.
+\emph{Case 1: $n_k\ge k/2$.}
 Then \eqref{eq:Phi_by_nk} gives
 \[
-\Phi_k\le \frac{4}{\nu^2(n_k+2)^2}\le \frac{16}{\nu^2(k+2)^2}.
+\Phi_k\le \frac{4}{\tau^2(n_k+2)^2}\le \frac{16}{\tau^2(k+2)^2}.
 \]
 
-Case 2: $n_k< k/2$ (hence $m_k>k/2$).
+\emph{Case 2: $n_k< k/2$ (hence $m_k>k/2$).}
 For every sharp index $\ell\in\mathcal S$, we have $\|g_{\ell+1}\|\le \frac14\|g_\ell\|$ by definition.
 For every other index, we have the growth bound \eqref{eq:grad_growth}.
 Therefore, after $k$ iterations,
@@ -3848,7 +3750,7 @@ j\ \ge\ \frac{\sqrt{2L_1 C_\Phi}}{\varepsilon}-2
 \]
 
 \smallskip
-\noindent\textbf{Step 5: total complexity with burn-in.}
+\noindent\textbf{Step 5: Total complexity with Burn-in.}
 Let $K(\varepsilon)$ be the first iteration where $\|g_k\|\le \varepsilon$. We have shown that starting from the burn-in index $K_0(\varepsilon)$, it takes at most $\cO(\varepsilon^{-1})$ additional steps. Thus, the total iteration complexity is bounded by:
 \[
 K(\varepsilon)\le K_0(\varepsilon)+C_K\,\varepsilon^{-1},
@@ -3887,7 +3789,7 @@ In particular, since $B_H$ is finite, we obtain
 \noindent\textbf{Bound $D(X_k)$.}
 By Lemma~\ref{lem:DX_post},
 \[
-D(X_k)\le \rho^{t_{k-1}}\Big(D(\tilde X_{k-1})+\frac{\|S_{k-1}\|}{\sqrt N}\Big).
+D(X_k)=D(X_k)\le \rho^{t_{k-1}}\Big(D(\tilde X_{k-1})+\frac{\|S_{k-1}\|}{\sqrt N}\Big).
 \]
 Moreover, $D(\tilde X_{k-1})\le 2D$ and Lemma~\ref{lem:step_bound_app} gives $\|S_{k-1}\|/\sqrt N\le \sqrt{G_g/M}$.
 Thus
@@ -3905,6 +3807,7 @@ Therefore,
 Using \eqref{eq:delta_schedule}, we obtain $\bar\delta_k\le \|g_k\|^{1+\gamma}$ for all sufficiently large $k$.
 \end{proof}
 
+% (Full proof inserted; see v4 script source for details.)
 \begin{proof}[Proof of Theorem~\ref{thm:superlinear}]
 Let $x_k:=\bar x_k$, $g_k:=\nabla f(x_k)$, and $H_k:=\nabla^2 f(x_k)$.
 Under Assumption~\ref{ass:strong}, for all $k$ we have $H_k\succeq \mu I$ on the level set.
@@ -3952,25 +3855,31 @@ support the main results in Section~\ref{sec:experiments}.
 All settings are identical to those described in
 Section~\ref{ssec:setup} unless stated otherwise.
 
-\subsection{Additional per-problem convergence curves}
+\subsection{Full per-problem convergence curves}
 
-The relF-vs.-iteration panel for all nine functions is already shown
-in Figure~\ref{fig:relF_steps_all} of the main text.
-Below we collect the remaining metrics.
+\begin{figure}[htbp]
+	\centering
+	\safeincludegraphics[width=\textwidth]{multiobj_steps_vs_relF}
+	\caption{relF vs.\ iteration for all nine test functions
+		($N{=}10$, $d{=}30$, 20 MC runs).
+		Solid: \textsc{DisGrem} family; dashed: baselines.
+		Shaded bands: $\pm 1$ s.d.}
+	\label{fig:app_relF_steps}
+\end{figure}
 
 \begin{figure}[htbp]
 	\centering
 	\safeincludegraphics[width=\textwidth]{multiobj_steps_vs_combo}
 	\caption{Composite optimality (combo $=\|\nabla f(\bar x_k)\|+\mathrm{cons}_k$)
 		vs.\ iteration for all nine functions.
-		Same setting as Figure~\ref{fig:relF_steps_all}.}
+		Same setting as Figure~\ref{fig:app_relF_steps}.}
 	\label{fig:app_combo_steps}
 \end{figure}
 
 \begin{figure}[htbp]
 	\centering
 	\safeincludegraphics[width=\textwidth]{multiobj_timeCost_vs_relF}
-	\caption{$\mathrm{relF}$ vs.\ wall-clock time (seconds) for all nine
+	\caption{relF vs.\ wall-clock time (seconds) for all nine
 		functions.}
 	\label{fig:app_relF_time}
 \end{figure}
@@ -3978,7 +3887,7 @@ Below we collect the remaining metrics.
 \begin{figure}[htbp]
 	\centering
 	\safeincludegraphics[width=\textwidth]{multiobj_commCost_vs_relF}
-	\caption{$\mathrm{relF}$ vs.\ cumulative communication cost (MB) for
+	\caption{relF vs.\ cumulative communication cost (MB) for
 		all nine functions.}
 	\label{fig:app_relF_comm}
 \end{figure}
@@ -4037,7 +3946,7 @@ Below we collect the remaining metrics.
 	\caption{Stepsize sensitivity for first-order baselines
 		(EXTRA and DIGing) on four functions.
 		10 values of $\alpha$ (light-to-dark).
-		Divergent runs are clipped at $\mathrm{relF}=10^4$.}
+		Divergent runs are clipped at relF~$=10^4$.}
 	\label{fig:sweep_first}
 \end{figure}
 
@@ -4046,7 +3955,7 @@ Below we collect the remaining metrics.
 	\safeincludegraphics[width=\textwidth]{second-order_combined}
 	\caption{Key-parameter sensitivity for second-order baselines
 		on four functions: penalty~$c$ (DQM), penalty~$\rho$ (ESOM),
-		regularization~$\tau$ (SONATA), stepsize~$\alpha$ (Net-GIANT).}
+		regularisation~$\tau$ (SONATA), step size~$\alpha$ (Net-GIANT).}
 	\label{fig:sweep_second}
 \end{figure}
 

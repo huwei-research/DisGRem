@@ -32,16 +32,28 @@ desktop.ini
 *.eps
 *.svg
 
-# Exception: paper figures are tracked
+# Exception: paper and presentation figures/PDFs are tracked
 !paper/**/*.pdf
 !paper/**/*.png
-!paper/**/*.jpg
+!presentation/**/*.pdf
+!presentation/**/*.png
 
-# LaTeX build artifacts
+# LaTeX build artifacts (paper + beamer)
 *.aux
 *.out
 *.thm
 *.bbl
 *.blg
 *.synctex.gz
+*.fls
+*.fdb_latexmk
+*.run.xml
+*.bcf
+*.xdv
 texput.log
+
+# Beamer-specific build artifacts
+*.nav
+*.snm
+*.toc
+*.vrb
