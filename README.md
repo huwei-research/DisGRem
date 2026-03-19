@@ -1,4 +1,4 @@
-# DisGRem: Distributed Gradient-Regularized Method
+# DisGRem: Distributed Gradient-Regularized Newton Method
 
 ## Repository Structure
 - paper/ - LaTeX paper sources

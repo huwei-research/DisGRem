@@ -165,7 +165,7 @@ Copy-Item BUPTR\.cursor\rules\project-conventions.mdc .cursor\rules\project-conv
 - **Projects**: There are 4 repositories:
   - `BUPTR` — Trust-region optimization solver
   - `DFOETR` — Derivative-free optimization with ellipsoidal trust region
-  - `DisGRem` — Distributed gradient-regularized method
+  - `DisGRem` — Distributed gradient-regularized Newton method
   - `RSSM` — Regular simplicial search method (theory complete, numerics pending)
 - **Local directory names** will match GitHub repo names: `BUPTR/`, `DFOETR/`,
   `DisGRem/`, `RSSM/`.
