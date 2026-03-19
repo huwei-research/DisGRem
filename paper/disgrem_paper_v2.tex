@@ -1,0 +1,2766 @@
+% !TEX TS-program = pdflatex
+\pdfoutput=1
+\documentclass[11pt,a4paper]{article}
+
+% ============================================================
+% Packages
+% ============================================================
+\usepackage{amsmath,amsfonts,amssymb,amsthm,fullpage,booktabs}
+\usepackage{float} % enables the [H] float placement specifier
+\usepackage{algorithm,algpseudocode}
+\usepackage[utf8]{inputenc}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{graphicx}
+% Safe figure include: compile even if figure files are missing
+\makeatletter
+\newcommand{\safeincludegraphics}[2][]{%
+	\begingroup
+	% Make \IfFileExists search the same paths as \includegraphics
+	\let\input@path\Ginput@path
+	\def\@foundfile{}%
+	% Try without extension first (rare), then common extensions
+	\IfFileExists{#2}{\def\@foundfile{#2}}{%
+		\IfFileExists{#2.pdf}{\def\@foundfile{#2.pdf}}{%
+			\IfFileExists{#2.png}{\def\@foundfile{#2.png}}{%
+				\IfFileExists{#2.jpg}{\def\@foundfile{#2.jpg}}{%
+					\IfFileExists{#2.jpeg}{\def\@foundfile{#2.jpeg}}{%
+						\IfFileExists{#2.eps}{\def\@foundfile{#2.eps}}{}%
+					}%
+				}%
+			}%
+		}%
+	}%
+	\ifx\@foundfile\@empty
+	\fbox{\parbox[c][0.18\textheight][c]{0.9\linewidth}{\centering
+			Missing figure: \texttt{\detokenize{#2}}}}%
+	\else
+	\includegraphics[#1]{\@foundfile}%
+	\fi
+	\endgroup
+}
+\makeatother
+
+\usepackage{multirow}
+\usepackage{subcaption}
+\graphicspath{
+	{./results/fig_multiobj/}
+	{./results/fig_single/}
+	{./results_scalability/fig_scalability/}
+	{./results_robust/fig_robust/}
+	{./results_param/param_study/}
+}
+
+\emergencystretch=2em
+\allowdisplaybreaks
+
+\hypersetup{
+	colorlinks=true,
+	linkcolor=blue,
+	filecolor=magenta,
+	urlcolor=cyan,
+	citecolor=blue,
+}
+
+% Avoid hyperref PDF string warnings for math in bookmarks
+\pdfstringdefDisableCommands{%
+	\def\cO{O}%
+	\def\one{1}%
+	\def\J{J}%
+	\def\Pmat{P}%
+	\def\norm#1{||#1||}%
+	\def\ip#1#2{<#1,#2>}%
+}
+
+% ============================================================
+% Theorem-like
+% ============================================================
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{assumption}[theorem]{Assumption}
+\newtheorem{remark}[theorem]{Remark}
+
+% ============================================================
+% Macros
+% ============================================================
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\one}{\mathbf{1}}
+\newcommand{\ip}[2]{\left\langle #1,#2\right\rangle}
+\newcommand{\norm}[1]{\left\|#1\right\|}
+\newcommand{\normtwo}[1]{\left\|#1\right\|_2}
+\newcommand{\normF}[1]{\left\|#1\right\|_F}
+\newcommand{\cO}{\mathcal{O}}
+\newcommand{\J}{\left(\frac{1}{N}\one\one^\top\right)}
+\newcommand{\Pmat}{I-\J}
+\newcommand{\ProjPSD}{\Pi_{\succeq 0}}
+
+\newcommand{\barx}{\bar x}
+\newcommand{\barg}{\bar g}
+\newcommand{\bars}{\bar s}
+
+% ============================================================
+% Title
+% ============================================================
+\title{\textbf{Distributed Gradient--Regularized Newton:\\
+		Adaptive Consensus and \texorpdfstring{$\mathcal{O}(1/k^2)$}{O(1/k^2)} Global Convergence}}
+\author{
+	\textbf{Anonymous Authors} \\
+	\textit{Institution} \\
+	\texttt{email@domain.edu}
+}
+\date{\today}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+	\maketitle
+	
+\begin{abstract}
+	We study decentralized optimization of a convex finite-sum objective over a connected network
+	of $N$ agents that communicate only with immediate neighbors.
+	Second-order methods are appealing in communication-limited environments because they reduce
+	the number of outer iterations, yet they are challenging to deploy in fully decentralized
+	settings due to (i) the cost of maintaining curvature information across the network,
+	(ii) sensitivity to stepsize selection, and (iii) network-induced disagreement and tracking errors.
+	Motivated by stepsize-free regularized Newton schemes \citep{mishchenko2023rn},
+	we propose \textsc{DisGrem}, a decentralized gradient--regularized Newton method that combines
+	gradient tracking, Hessian tracking with PSD projection, and a two-stage mixing
+	(pre-mixing before the local Newton solve, post-mixing after the update).
+	A user-chosen scaling factor $M>0$ amplifies the vanishing regularization
+	$\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$, enlarging the admissible heterogeneity regime
+	while preserving $\lambda_{i,k}\to 0$ as the gradient vanishes.
+	
+	Our analysis introduces a \emph{reference-step} construction that resolves the
+	non-commutativity between network averaging and matrix inversion, yielding an
+	\emph{inexact regularized Newton} characterization of the average iterate.
+	To quantify persistent curvature mismatch across agents, we introduce a bounded Hessian-heterogeneity
+	constant over the relevant level set; it enters our network-dependent constants and is mild in near-i.i.d.\ regimes.
+	Under convexity, Lipschitz Hessians, bounded level sets, and sufficiently accurate mixing,
+	we establish $\cO(1/k^2)$ functional decay and $\cO(\varepsilon^{-1})$ iteration complexity
+	to reach $\|\nabla f(\bar x_k)\|\le \varepsilon$ \emph{above a heterogeneity-dependent accuracy floor}
+	(and recover the classical centralized guarantees in homogeneous/zero-bias regimes).
+	Moreover, under a logarithmic accuracy schedule we obtain
+	$\cO(\varepsilon^{-1}\log(\varepsilon^{-1}))$ total neighbor-communication rounds.
+	
+	We also develop practical variants: \textsc{CeDisGrem} compresses Hessian corrections
+	to reduce communication by up to $50\%$, and \textsc{AdaDisGrem} adapts $M$ online.
+	Extensive numerical experiments on 15 benchmark objectives, including ill-conditioned
+	quadratics, log-sum-exp, real-data logistic regression, and non-convex landscapes,
+	show that the \textsc{DisGrem} family converges to near machine precision $5$--$8\times$ faster
+	than the best first-order baseline (EXTRA) and robustly handles weakly connected networks
+	where gradient-tracking first-order methods fail entirely.
+\end{abstract}
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\section{Introduction}
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	Decentralized optimization addresses problems of the form
+	\begin{equation}\label{eq:intro_prob}
+		\min_{x\in\R^d} f(x)\;:=\;\frac{1}{N}\sum_{i=1}^N f_i(x),
+	\end{equation}
+	where each $f_i$ is stored privately at node $i$ of a connected network and nodes communicate only with neighbors.
+	A principal bottleneck is \emph{communication}: algorithms must trade off local computation
+	against costly neighbor exchanges.
+	First-order decentralized methods may require many iterations on ill-conditioned problems, amplifying communication costs.
+	Second-order information can reduce outer iterations, but decentralized second-order methods face major obstacles:
+	curvature information is expensive to maintain and global convergence often requires careful stepsize control or line-search.
+	
+	A stepsize-free perspective is provided by the regularized Newton method of \citet{mishchenko2023rn},
+	which uses a vanishing regularization scale $\lambda_k\asymp \sqrt{\|g_k\|}$ and achieves the optimal functional rate $\cO(1/k^2)$
+	under convexity and Lipschitz Hessians without manual stepsize tuning.
+	This motivates: \emph{can we obtain the same outer-iteration complexity in a decentralized network while controlling disagreement/tracking errors?}
+	
+\noindent\textbf{Contributions.}
+We propose and analyze \textsc{DisGrem} (Distributed Gradient-Regularized Newton Method),
+which combines gradient tracking, Hessian tracking with PSD projection, and two-stage
+mixing (pre-mixing before the local Newton solve, post-mixing after the update).
+Our specific contributions are:
+\begin{itemize}[leftmargin=1.2em,itemsep=2pt]
+	\item \textbf{Algorithm design.}
+	We formulate a stepsize-free decentralized second-order method based on vanishing regularization
+	$\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$.
+	Two-stage mixing decouples the network averaging accuracy from the Newton solve,
+	and PSD projection of tracked Hessians maintains positive semidefiniteness throughout.
+	
+	\item \textbf{Reference-step framework.}
+	We introduce a reference-step construction to control the non-commutativity between network averaging
+	and matrix inversion, yielding an \textbf{inexact regularized Newton} characterization for the average iterate.
+	
+	\item \textbf{Hessian heterogeneity analysis.}
+	We identify the obstruction from persistent inter-agent Hessian mismatch and quantify it through
+	a bounded heterogeneity constant $\sigma_H$ on the relevant level set; see~\eqref{eq:sigma_H_def}.
+	
+	\item \textbf{Convergence guarantees.}
+	Under stated assumptions we prove $\Phi_k=\cO(1/k^2)$ functional decay and
+	\textbf{$\cO(\varepsilon^{-1})$} iteration complexity to reach $\|\nabla f(\bar x_k)\|\le \varepsilon$
+	for any $\varepsilon$ above the explicit floor in~\eqref{eq:eps_floor},
+	and \textbf{$\cO(\varepsilon^{-1}\log(\varepsilon^{-1}))$} total mixing rounds under a logarithmic accuracy schedule.
+	
+	\item \textbf{Practical variants.}
+	We develop \textbf{\textsc{CeDisGrem}}, which applies top-$r$ low-rank compression to Hessian correction messages
+	and reduces per-iteration communication by 30--50\% with negligible iteration overhead;
+	and \textbf{\textsc{AdaDisGrem}}, which adapts the scaling factor $M$ online to track local curvature changes.
+	
+	\item \textbf{Numerical evidence.}
+	Experiments on 15 objectives across well-conditioned and ill-conditioned convex problems, real-data logistic regression,
+	and non-convex landscapes show that the \textsc{DisGrem} family consistently converges to near machine precision while
+	first-order baselines stagnate on weakly connected networks.
+	It achieves $5$--$8\times$ fewer iterations than EXTRA and 100\% success rate in Monte-Carlo robustness trials
+	where gradient-tracking baselines fail.
+\end{itemize}
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\section{Related Work}
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	
+	\noindent\textbf{First-order decentralized methods.}
+	Decentralized (sub)gradient descent dates to \citet{nedic2009subgradient}.
+	The bias of constant-stepsize DGD is corrected by exact methods:
+	EXTRA~\citep{shi2015extra} uses a two-step update with a carefully chosen pair of matrices,
+	and exact diffusion~\citep{yuan2019exactdiffusion} reformulates the update in a primal-dual
+	framework.
+	Gradient tracking~\citep{nedic2017diging} achieves exact convergence
+	under a single doubly stochastic matrix by maintaining a running sum of gradient increments.
+	These methods achieve $\cO(1/k)$ or linear convergence for strongly convex objectives,
+	but their iteration complexity depends on $(1-\rho)^{-1}$ or $(1-\rho)^{-2}$, which becomes
+	prohibitive on weakly connected networks.
+	Fast distributed gradient methods~\citep{jakovetic2014fast} improve over pure gradient descent
+	but remain first-order.
+	
+	\noindent\textbf{Second-order and quasi-Newton decentralized methods.}
+	Network Newton~\citep{mokhtari2015networknewton_arxiv} approximates the global Newton direction
+	by a truncated power series of the Hessian, using multi-hop communication.
+	Newton tracking~\citep{mokhtari2020newtontracking} integrates Newton-type directions into the
+	tracking framework.
+	Decentralized quasi-Newton methods, including DQM~\citep{eisen2017dqn}, replace the exact
+	Hessian with L-BFGS-type approximations.
+	All of these methods require explicit stepsize tuning and do not provide global convergence
+	guarantees matching the centralized Newton rate.
+	The challenge of Hessian heterogeneity has not been explicitly characterized in prior work.
+	
+	\noindent\textbf{Regularized Newton and cubic regularization.}
+	The stepsize-free perspective adopted here is inspired by the centralized regularized Newton
+	method of \citet{mishchenko2023rn}, which uses $\lambda_k\asymp\sqrt{\|\nabla f(x_k)\|}$
+	and achieves the tight $\cO(1/k^2)$ functional rate under convexity and Lipschitz Hessians.
+	This builds on cubic-regularization ideas of \citet{nesterov2006cubic,cartis2011arc},
+	which also achieve $\cO(1/k^2)$ via an adaptive cubic model.
+	Our paper is the first, to our knowledge, to show that the centralized $\cO(1/k^2)$
+	rate can be preserved in a decentralized network via Hessian/gradient tracking and
+	two-stage mixing, and the first to provide a transparent treatment of the Hessian
+	heterogeneity obstruction.
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\section{Preliminaries and Assumptions}\label{sec:prelim}
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\subsection{Network model and notation}
+	Communication uses a symmetric, nonnegative, doubly stochastic mixing matrix $W\in\R^{N\times N}$:
+	$W_{ij}\ge0$, $W\one=\one$, and $\one^\top W=\one^\top$.
+	Define the averaging projector $\J=\frac{1}{N}\one\one^\top$ and $\Pmat=I-\J$.
+	Let $\rho := \normtwo{W-\J}\in[0,1)$, strictly less than $1$ for a connected undirected network.
+	For stacked vectors $Z=[z_1;\dots;z_N]\in\R^{Nd}$ we use the Euclidean norm $\|Z\|$.
+	We write $\bar z:=\frac1N\sum_{i=1}^N z_i$ for averages.
+	
+	\subsection{Standing assumptions}
+	\begin{assumption}\label{ass:standing}
+		\begin{enumerate}\itemsep2pt
+			\item \textbf{Convexity and smoothness.}
+			Each $f_i$ is convex and twice continuously differentiable.
+			Its gradient is $L_1$-Lipschitz and its Hessian is $L_2$-Lipschitz:
+			\[
+			\norm{\nabla f_i(x)-\nabla f_i(y)}\le L_1\norm{x-y},
+			\qquad
+			\normtwo{\nabla^2 f_i(x)-\nabla^2 f_i(y)}\le L_2\norm{x-y}.
+			\]
+			\item \textbf{PSD Hessians.} $\nabla^2 f_i(x)\succeq0$ for all $x$ and all $i$.
+			\item \textbf{Connected network.} $W$ is symmetric, doubly stochastic, and $\rho=\normtwo{W-\J}<1$.
+			\item \textbf{Bounded level set (local iterates).} There exist $D>0$ and $x_\star\in\arg\min f$ such that for all $k\ge 0$ and all $i\in\{1,\dots,N\}$,
+			\begin{equation}\label{eq:bounded_levelset}
+				\norm{x_{i,k}-x_\star}\le D.
+			\end{equation}
+			Consequently, $\norm{\bar x_k-x_\star}\le D$ and $\norm{\tilde x_{i,k}-x_\star}\le D$ for all $i,k$ because $\bar x_k$ and $\tilde x_{i,k}$ are convex combinations of the $x_{j,k}$.
+			\item \textbf{Bounded Hessians on the relevant set.}
+			There exists $M_H\ge0$ such that $\normtwo{\nabla^2 f(x)}\le M_H$ for all $x$ with $\norm{x-x_\star}\le D$.
+			\item \textbf{Bounded Hessian heterogeneity (level-set constant).}
+			Define
+			\begin{equation}\label{eq:sigma_H_def}
+				\sigma_H := \sup\Big\{\, \frac{1}{\sqrt N}\normF{((\Pmat)\otimes I_{d^2})\,\nabla^2 F(\one\otimes x)}\;:\; \norm{x-x_\star}\le D\,\Big\}\in[0,\infty).
+			\end{equation}
+			This constant measures the RMS mismatch of local Hessians relative to the average Hessian when evaluated at the same point.
+			\item \textbf{Uniform bound on averaged Hessian-mismatch term.} Define the per-node mismatch
+			$\hat e_{i,k}:=\normF{\tilde H_{i,k}-\nabla^2 f_i(\tilde x_{i,k})}$ and its average $\bar e_k:=\frac1N\sum_{i=1}^N\hat e_{i,k}$.
+			There exists a finite constant $\bar e_{\max}\ge 0$ such that
+			\begin{equation}\label{eq:ebar_max}
+				\bar e_k\le \bar e_{\max}\qquad\text{for all }k\ge 0.
+			\end{equation}
+			This assumption can be enforced in practice by clipping $\hat e_{i,k}$ or by spectrally truncating tracked Hessians/corrections.
+			\item \textbf{Regularization scaling.} The user-chosen scaling factor satisfies $M\ge L_2$.
+		\end{enumerate}
+	\end{assumption}
+	
+	\begin{remark}[Interpretation of Assumption~\ref{ass:standing}(6)]
+		Assumption~\ref{ass:standing}(6) is a \emph{boundedness} condition on curvature mismatch over the relevant level set.
+		It is automatically satisfied whenever $\nabla^2 f_i$ are bounded on $\{x:\ \norm{x-x_\star}\le D\}$, and it becomes small in near-i.i.d.\ regimes.
+		Unlike a vanishing condition, it does \emph{not} force local Hessians to coincide at stationary points; rather, it quantifies the irreducible mismatch that must be controlled by mixing and regularization.
+	\end{remark}
+	
+	% ============================================================
+	% Derived heterogeneity constant (finite on the bounded level set)
+	% ============================================================
+	Define the (possibly zero) gradient-heterogeneity constant
+	\begin{equation}\label{eq:sigma_g_def}
+		\sigma_g := \sup\Big\{\, \norm{((\Pmat)\otimes I_d)\,\nabla F(\one\otimes x)}\;:\; \norm{x-x_\star}\le D\,\Big\}\in[0,\infty),
+	\end{equation}
+	which is finite under Assumption~\ref{ass:standing}(1) and (4) because $\nabla F(\one\otimes x)$ is continuous on a compact set.
+	In interpolation/shared-minimizer regimes one typically has $\sigma_g=0$, while for general heterogeneous data this constant may be positive and induces an unavoidable accuracy floor.
+	
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\section{Algorithm}\label{sec:alg}
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	
+	\subsection{Design motivation}\label{ssec:design}
+	
+	Three interacting challenges must be resolved to lift regularized Newton to the decentralized setting.
+	
+	\textbf{(i) Averaging vs.\ inversion.}
+	In the centralized regularized Newton method of \citet{mishchenko2023rn} the Newton system involves
+	$(\nabla^2 f(\bar x_k)+\lambda_k I)^{-1}$, which is an invertible function of the \emph{average} gradient.
+	In a network each agent solves its own local system, so the true average step
+	$\bar s_k = \frac1N\sum_i s_{i,k} \ne (\frac1N\sum_i A_{i,k})^{-1}(\frac1N\sum_i g_{i,k})$
+	in general: averaging and inversion do not commute.
+	Pre-mixing reduces disagreement in the inputs $(x_{i,k}, g_{i,k}, H_{i,k})$ before the solve,
+	making individual systems closer to the average system and bounding the resulting
+	\emph{step dispersion} (Section~\ref{sec:theory}, Lemma~\ref{lem:step-disp}).
+	
+	\textbf{(ii) Hessian maintenance and positivity.}
+	Tracker dynamics propagate Hessian increments $\nabla^2 f_j(x_{j,k+1})-\nabla^2 f_j( x_{j,k})$
+	through the network.
+	Floating-point errors and network delays may produce non-symmetric or indefinite tracked Hessians,
+	which would make the regularized Newton system ill-conditioned.
+	We therefore symmetrize and project $\widehat H_{i,k+1}$ onto the PSD cone in Frobenius norm
+	before storing $H_{i,k+1}$.
+	This projection is non-expansive (Remark~\ref{rem:psd-nonexp}) and introduces an error
+	$\hat e_{i,k}:=\normF{\tilde H_{i,k}-\nabla^2 f_i(\tilde x_{i,k})}$ that is absorbed into
+	the regularization via the augmented shift $\lambda_{i,k}+\hat e_{i,k}$,
+	guaranteeing a well-posed local solve for any tracked Hessian.
+	
+	\textbf{(iii) Stepsize-free regularization.}
+	Setting $\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$ mirrors the centralized choice
+	$\lambda_k\asymp\sqrt{\|\nabla f(\bar x_k)\|}$, which achieves $\cO(1/k^2)$ without a line search
+	or manual stepsize.
+	The user constant $M\ge L_2$ scales the regularizer uniformly: larger $M$ produces larger shifts,
+	which damp Newton steps, tolerate wider heterogeneity, and improve stability on
+	ill-conditioned or non-convex problems (Section~\ref{ssec:param});
+	once the iterates enter a region where $\|\nabla f\|\to 0$, the regularizer vanishes automatically.
+	
+	\subsection{\textsc{DisGrem}: full algorithm}\label{ssec:disgrem}
+	
+	Each node $i$ stores a primal variable $x_{i,k}\in\R^d$, a gradient tracker $g_{i,k}\in\R^d$,
+	and a Hessian tracker $H_{i,k}\in\R^{d\times d}$.
+	$\ProjPSD(\cdot)$ denotes the Euclidean (Frobenius) projection onto the PSD cone.
+	
+	\begin{algorithm}[H]
+		\caption{Decentralized Gradient--Regularized Newton (\textsc{DisGrem})}
+		\label{alg:disgrem}
+		\begin{algorithmic}[1]
+			\State \textbf{Input:} $\{x_{i,0}\}_{i=1}^N$, mixing matrix $W$, Lipschitz constants $L_1,L_2>0$, scaling factor $M\ge L_2$.
+			\State \textbf{Initialize:} $g_{i,0}\gets \nabla f_i(x_{i,0})$, $H_{i,0}\gets \nabla^2 f_i(x_{i,0})$.
+			\For{$k=0,1,2,\dots$}
+			\State \textbf{(A) Pre-mixing:} choose $\tau_k\ge 1$ mixing rounds and set
+			\[
+			\tilde x_{i,k}\gets \sum_{j=1}^N [W^{\tau_k}]_{ij}\,x_{j,k},\quad
+			\tilde g_{i,k}\gets \sum_{j=1}^N [W^{\tau_k}]_{ij}\,g_{j,k},\quad
+			\tilde H_{i,k}\gets \sum_{j=1}^N [W^{\tau_k}]_{ij}\,H_{j,k}.
+			\]
+			\State \textbf{(B) Local computation (parallel for each $i$):}
+			\[
+			\lambda_{i,k} \gets \sqrt{M\,\norm{\tilde g_{i,k}}},\quad
+			\hat e_{i,k} \gets \normF{\tilde H_{i,k}-\nabla^2 f_i(\tilde x_{i,k})}.
+			\]
+			\Statex\hspace{1.6em}\textbf{Solve} $(\tilde H_{i,k}+(\lambda_{i,k}+\hat e_{i,k})I)\,s_{i,k}=-\tilde g_{i,k}$
+			\Statex\hspace{1.6em}(set $s_{i,k}=0$ if $\tilde g_{i,k}=0$); set $y_{i,k+1}\gets \tilde x_{i,k}+s_{i,k}$.
+			\State \textbf{(C) Post-mixing:} choose $t_k\ge 1$ mixing rounds and set
+			\[
+			x_{i,k+1}\gets \sum_{j=1}^N [W^{t_k}]_{ij}\,y_{j,k+1}.
+			\]
+	\State \textbf{(D) Tracker updates:}
+	\[
+	g_{i,k+1}\gets \sum_{j=1}^N [W^{t_k}]_{ij}\!\Big(\tilde g_{j,k}+\nabla f_j(x_{j,k+1})-\nabla f_j(x_{j,k})\Big),
+	\]
+	\[
+	\widehat H_{i,k+1}\gets \sum_{j=1}^N [W^{t_k}]_{ij}\!\Big(\tilde H_{j,k}+\nabla^2 f_j(x_{j,k+1})-\nabla^2 f_j(x_{j,k})\Big),
+	\]
+	\[
+	H_{i,k+1}\gets \ProjPSD\!\left(\tfrac12\bigl(\widehat H_{i,k+1}+\widehat H_{i,k+1}^\top\bigr)\right).
+	\]
+			\EndFor
+		\end{algorithmic}
+	\end{algorithm}
+	
+\subsection{Communication cost per iteration}\label{ssec:comm}
+
+Each outer iteration of \textsc{DisGrem} involves $(\tau_k + t_k)$ rounds of neighbor communication.
+In each round every agent $i$ sends messages to and receives messages from its $|\mathcal N_i|$ neighbors.
+In \textsc{DisGrem}, the natural payload exchanged per neighbor per round consists of:
+\begin{itemize}[leftmargin=1.2em,itemsep=1pt]
+	\item two $d$-dimensional vectors (e.g., mixing of $(x,g)$ in pre-mixing, or mixing of $(y,g)$ in post-mixing): $2d$ floats,
+	\item one $d\times d$ symmetric matrix (Hessian tracker or Hessian increment): $\tfrac{d(d+1)}{2}$ floats.
+\end{itemize}
+Equivalently, the two vectors can be concatenated into a single $2d$-vector; this does not change the byte complexity.
+
+Let $n_v$ denote the number of $d$-vectors transmitted per round (for \textsc{DisGrem}, $n_v=2$).
+With double precision (8 bytes per float), the \emph{sent} message volume per agent per outer iteration is
+\begin{equation}\label{eq:comm_cost_iter}
+	C_{\mathrm{iter}}^{\mathrm{send}}(k)
+	= (\tau_k+t_k)\cdot |\mathcal N_i|\cdot \Bigl(n_v d + \tfrac{d(d+1)}{2}\Bigr)\cdot 8 \ \ \text{bytes}.
+\end{equation}
+If one counts both sending and receiving volume, then
+$C_{\mathrm{iter}}^{\mathrm{send+recv}}(k)=2\,C_{\mathrm{iter}}^{\mathrm{send}}(k)$.
+
+For the default setting $N=10$, $d=10$, and the random geometric graph with $r_0=0.5$ giving average degree
+$|\mathcal N_i|\approx 3.5$, taking $\tau_k=t_k=3$ and $n_v=2$ yields
+\[
+C_{\mathrm{iter}}^{\mathrm{send}}\approx 6\times 3.5\times\Bigl(20+55\Bigr)\times 8
+\approx 12.6\,\text{kB}
+\quad \text{per agent per outer iteration}.
+\]
+This back-of-the-envelope estimate is consistent with the empirical \texttt{commCost} magnitudes reported in
+Table~\ref{tab:main} (up to graph-degree variability and implementation details such as message aggregation and bookkeeping).
+	
+	\subsection{Practical variants}\label{ssec:variants}
+	
+\noindent\textbf{\textsc{CeDisGrem}: compressed Hessian communication.}
+The dominant communication cost of \textsc{DisGrem} is the $\frac{d(d+1)}{2}$-dimensional
+Hessian increment $\nabla^2 f_j(x_{j,k+1})-\nabla^2 f_j(x_{j,k})$.
+\textsc{CeDisGrem} replaces each symmetric Hessian increment
+$\Delta H_{j,k}:=\nabla^2 f_j(x_{j,k+1})-\nabla^2 f_j(x_{j,k})$
+by a rank-$r$ symmetric truncation based on the eigen-decomposition.
+Let $\Delta H_{j,k}=V\operatorname{diag}(\mu_1,\dots,\mu_d)V^\top$ with
+$|\mu_1|\ge \cdots \ge |\mu_d|$ and $V=[v_1,\dots,v_d]$ orthogonal.
+Define the truncated approximation
+\[
+\hat\Delta H_{j,k}:=\sum_{\ell=1}^r \mu_\ell v_\ell v_\ell^\top
+= V_r\Lambda_r V_r^\top,
+\]
+where $V_r=[v_1,\dots,v_r]\in\R^{d\times r}$ and $\Lambda_r=\operatorname{diag}(\mu_1,\dots,\mu_r)\in\R^{r\times r}$.
+This $\hat\Delta H_{j,k}$ is the best rank-$r$ symmetric approximation of $\Delta H_{j,k}$ in Frobenius norm
+(equivalently, the best rank-$r$ approximation for a symmetric matrix is obtained by keeping the $r$
+eigenpairs with largest absolute eigenvalues).
+Thus, transmitting $(V_r,\Lambda_r)$ costs $r(d+1)$ floats instead of $\frac{d(d+1)}{2}$ floats per neighbor per round.
+
+The truncation error satisfies
+\[
+\normF{\Delta H_{j,k}-\hat\Delta H_{j,k}}
+=\left(\sum_{\ell=r+1}^d \mu_\ell^2\right)^{1/2}
+\le |\mu_{r+1}(\Delta H_{j,k})|\sqrt{d-r},
+\]
+where $\mu_{r+1}(\Delta H_{j,k})$ denotes the $(r+1)$-th largest absolute eigenvalue.
+This error is absorbed into $\hat e_{i,k}$ and thus into the regularization automatically.
+Empirically, $r=\lceil d/5\rceil$ reduces communication by 30--50\% with negligible iteration overhead
+(Table~\ref{tab:main}).
+	
+	\noindent\textbf{\textsc{AdaDisGrem}: adaptive scaling factor.}
+	The default choice $M=\mathrm{const}$ requires prior knowledge of $L_2$.
+	\textsc{AdaDisGrem} maintains a running estimate $\hat M_k$ of the local Hessian Lipschitz
+	constant using the secant condition:
+	\[
+	\hat M_k \gets \max\!\Bigl(\hat M_{k-1},\;
+	\frac{\normtwo{\nabla^2 f_i(x_{i,k})-\nabla^2 f_i(x_{i,k-1})}}{\norm{x_{i,k}-x_{i,k-1}}}\Bigr),
+	\]
+	and sets $\lambda_{i,k}=\sqrt{\hat M_k\|\tilde g_{i,k}\|}$.
+	This heuristic removes the need to specify $L_2$ in practice; a full theoretical treatment of the adaptive rule is left for future work.
+	
+	\subsection{Practical guidelines for parameter selection}\label{ssec:practical}
+	
+	\begin{itemize}[leftmargin=1.2em,itemsep=2pt]
+		\item \textbf{Scaling factor $M$.}
+		Theorem~\ref{thm:main} requires $M\ge L_2$.
+		In practice, setting $M = c \cdot \hat L$, where $\hat L$ is a rough estimate of the
+		gradient Lipschitz constant and $c\in[0.5, 2.0]$, works well across all tested problems.
+		Our parameter study (Section~\ref{ssec:param}) shows convergence is largely insensitive
+		to the exact value of $M$ within this range.
+		When $L_2$ is unknown, use \textsc{AdaDisGrem}.
+		\item \textbf{Consensus rounds $N_c$.}
+		The theory requires $\tau_k, t_k = \cO(\log 1/\|\tilde{\bar g}_k\|)$, which grows
+		logarithmically.  In practice, a fixed $N_c = 3$--$5$ rounds per stage is sufficient
+		for most networks with $\rho \le 0.95$.
+		For strongly sparse networks ($\rho > 0.97$), increasing $N_c$ to $8$--$10$
+		significantly improves stability.
+		\item \textbf{Hessian compression rank $r$ (\textsc{CeDisGrem}).}
+		Set $r = \lceil 0.2d \rceil$ as a default; increase $r$ if convergence slows.
+		For diagonal-dominant Hessians (e.g.\ $\ell_2$-regularized losses), even $r=1$
+		is often sufficient.
+	\end{itemize}
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\section{Theory and Convergence Analysis}\label{sec:theory}
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	Throughout, Assumption~\ref{ass:standing} holds.
+	All proofs are provided in Appendix~\ref{app:proofs}.
+	
+	\subsection{Basic inequalities}
+	\begin{lemma}[Third-order Taylor bound]\label{lem:taylor3}
+		Let $h:\R^d\to\R$ have $L_2$-Lipschitz Hessian. Then for all $x,s$,
+		\[
+		h(x+s)\le h(x)+\ip{\nabla h(x)}{s}+\frac12 s^\top\nabla^2 h(x)s+\frac{L_2}{6}\norm{s}^3.
+		\]
+	\end{lemma}
+	
+	\begin{lemma}[Consensus contraction]\label{lem:consensus}
+		For any $z\in\R^N$ and integer $t\ge 1$,
+		\[
+		\normtwo{(W^t-\J)z}\le \rho^t\normtwo{z}.
+		\]
+		Consequently, for any stacked $Z\in\R^{Nd}$,
+		\[
+		\norm{((W^t-\J)\otimes I_d)Z}\le \rho^t\norm{Z}.
+		\]
+	\end{lemma}
+	
+	\begin{lemma}[Smooth convex gap--gradient inequality]\label{lem:gap-grad}
+		Let $h$ be convex with $L$-Lipschitz gradient. Then for any minimizer $x_\star$,
+		\[
+		\norm{\nabla h(x)}^2\le 2L\big(h(x)-h(x_\star)\big).
+		\]
+	\end{lemma}
+	
+	\subsection{Frobenius stabilizer: a local descent inequality}
+	\begin{lemma}[Frobenius domination]\label{lem:frob}
+		Let $E$ be symmetric and $\hat e=\normF{E}$. Then $\hat e\ge \normtwo{E}$ and $\hat e I\pm E\succeq 0$.
+		In particular, for any $s$, $-\hat e\norm{s}^2-s^\top E s\le 0$.
+	\end{lemma}
+	
+	\begin{lemma}[Scaled regularization dominates step size]\label{lem:M-vs-s}
+		Assume $\tilde H_{i,k}\succeq 0$ and $M\ge L_2$. Then
+		\[
+		M\norm{s_{i,k}}\le \lambda_{i,k}
+		\qquad\text{and hence}\qquad
+		L_2\norm{s_{i,k}}\le \lambda_{i,k}.
+		\]
+	\end{lemma}
+	
+	\begin{lemma}[Local descent with tracking]\label{lem:local-descent}
+		Fix $i,k$. Define $\tilde\delta_{i,k}:=\tilde g_{i,k}-\nabla f_i(\tilde x_{i,k})$ and
+		$\tilde e_{i,k}:=\tilde H_{i,k}-\nabla^2 f_i(\tilde x_{i,k})$.
+		Then
+		\begin{equation}\label{eq:local-descent}
+			f_i(\tilde x_{i,k}+s_{i,k})
+			\le f_i(\tilde x_{i,k})
+			-\lambda_{i,k}\norm{s_{i,k}}^2
+			-\ip{\tilde\delta_{i,k}}{s_{i,k}}
+			+\frac{L_2}{6}\norm{s_{i,k}}^3.
+		\end{equation}
+	\end{lemma}
+	
+	\begin{lemma}[Clean local descent]\label{lem:local-clean}
+		Under Lemma~\ref{lem:local-descent} and Lemma~\ref{lem:M-vs-s},
+		\[
+		f_i(\tilde x_{i,k}+s_{i,k})
+		\le f_i(\tilde x_{i,k})
+		-\frac{5}{6}\lambda_{i,k}\norm{s_{i,k}}^2
+		-\ip{\tilde\delta_{i,k}}{s_{i,k}}.
+		\]
+	\end{lemma}
+	
+	\subsection{Average dynamics and reference step}
+	Define pre-mixed averages:
+	\[
+	\tilde{\bar x}_k:=\frac1N\sum_{i=1}^N\tilde x_{i,k},\quad
+	\tilde{\bar g}_k:=\frac1N\sum_{i=1}^N\tilde g_{i,k},\quad
+	\tilde{\bar H}_k:=\frac1N\sum_{i=1}^N\tilde H_{i,k},
+	\]
+	and the average step $\bar s_k:=\frac1N\sum_{i=1}^N s_{i,k}$.
+	
+	\begin{lemma}[Average preservation]\label{lem:avg-pres}
+		For all $k$, $\tilde{\bar x}_k=\bar x_k$ and $\bar x_{k+1}=\bar x_k+\bar s_k$.
+	\end{lemma}
+	
+\begin{lemma}[Average tracking identity]\label{lem:avg-track}
+	Assume Algorithm~\ref{alg:disgrem} uses the tracker update in step \textbf{(D)} and is initialized by
+	$g_{i,0}=\nabla f_i(x_{i,0})$.
+	Then for all $k\ge 0$,
+	\[
+	\bar g_k:=\frac1N\sum_{i=1}^N g_{i,k}=\frac1N\sum_{i=1}^N \nabla f_i(x_{i,k}),
+	\qquad
+	\tilde{\bar g}_k=\bar g_k.
+	\]
+\end{lemma}
+\begin{proof}
+	Because $W^{t_k}$ is doubly stochastic, averaging step \textbf{(D)} gives
+	\[
+	\bar g_{k+1}=\tilde{\bar g}_k+\frac1N\sum_{i=1}^N\big(\nabla f_i(x_{i,k+1})-\nabla f_i(x_{i,k})\big).
+	\]
+	Also $\tilde{\bar g}_k=\bar g_k$ since pre-mixing preserves averages.
+	By induction with $\bar g_0=\frac1N\sum_i\nabla f_i(x_{i,0})$, the claim follows.
+\end{proof}
+	
+	Define
+	\[
+	\tilde\lambda_{i,k}:=\lambda_{i,k}+\hat e_{i,k},\qquad
+	\tilde{\bar\lambda}_k:=\frac1N\sum_{i=1}^N\tilde\lambda_{i,k},\qquad
+	A_{i,k}:=\tilde H_{i,k}+\tilde\lambda_{i,k}I.
+	\]
+	Then $s_{i,k}=-A_{i,k}^{-1}\tilde g_{i,k}$.
+	Define the reference system
+	\[
+	A_k^{\mathrm{ref}}:=\tilde{\bar H}_k+\tilde{\bar\lambda}_k I,\qquad
+	s_k^{\mathrm{ref}}:=-(A_k^{\mathrm{ref}})^{-1}\tilde{\bar g}_k.
+	\]
+	
+	\begin{lemma}[Average regularization regime]\label{lem:avg-regime}
+		For all $k$,
+		\[
+		L_2\norm{\bar s_k}\le \frac1N\sum_{i=1}^N \lambda_{i,k}\le \tilde{\bar\lambda}_k.
+		\]
+	\end{lemma}
+	
+	\subsection{Bridge bounds and step dispersion}
+	Define the pre-mixed disagreement energy
+	\[
+	\tilde E_k:=\frac{1}{N}\sum_{i=1}^N \norm{\tilde x_{i,k}-\bar x_k}^2.
+	\]
+	Define the post-mixing primal dispersion
+	\[
+	D_X(k):=\sqrt{\frac1N\sum_{i=1}^N \|x_{i,k}-\bar x_k\|^2}.
+	\]
+	Define the pre-mixed gradient tracking residuals
+	\[
+	\tilde\delta_{i,k}:=\tilde g_{i,k}-\nabla f_i(\tilde x_{i,k}),\qquad
+	\tilde\Delta_k:=[\tilde\delta_{1,k};\dots;\tilde\delta_{N,k}]\in\R^{Nd}.
+	\]
+	
+	
+\begin{lemma}[A computable upper bound for $\norm{\tilde\Delta_k}$]\label{lem:tildeDelta-upper}
+	For every $k$,
+	\[
+	\frac{\norm{\tilde\Delta_k}}{\sqrt N}
+	\le D(\tilde G_k) + L_1\sqrt{\tilde E_k} + L_1 D_X(k) + \frac{\sigma_g}{\sqrt N},
+	\qquad\text{where }\;D(\tilde G_k):=\sqrt{\frac1N\sum_{i=1}^N\norm{\tilde g_{i,k}-\tilde{\bar g}_k}^2}.
+	\]
+	In particular, $\Delta^g_k\le D(\tilde G_k)$ and hence
+	$\frac{\norm{\tilde\Delta_k}}{\sqrt N}\le \Delta^g_k + L_1\sqrt{\tilde E_k} + L_1 D_X(k) + \frac{\sigma_g}{\sqrt N}$.
+\end{lemma}
+	
+	\begin{lemma}[Gradient bridge]\label{lem:bridge-grad}
+		For every $k$,
+		\[
+		\norm{\nabla f(\bar x_k)-\tilde{\bar g}_k}
+		\le \frac{\norm{\tilde\Delta_k}}{\sqrt N}+L_1\sqrt{\tilde E_k}.
+		\]
+	\end{lemma}
+	
+	\begin{lemma}[Hessian bridge]\label{lem:bridge-hess}
+		For every $k$,
+		\[
+		\normtwo{\nabla^2 f(\bar x_k)-\tilde{\bar H}_k}
+		\le L_2\sqrt{\tilde E_k}+\bar e_k,\qquad
+		\bar e_k:=\frac1N\sum_{i=1}^N \hat e_{i,k}.
+		\]
+	\end{lemma}
+	
+	\begin{remark}[PSD projection is non-expansive]\label{rem:psd-nonexp}
+		$\ProjPSD(\cdot)$ is the Euclidean (Frobenius) projection onto a closed convex cone, hence
+		$\normF{\ProjPSD(A)-\ProjPSD(B)}\le \normF{A-B}$ for all $A,B$.
+	\end{remark}
+	
+	\begin{lemma}[PSD projection does not increase dispersion]\label{lem:psd-dispersion}
+		Let $T(A):=\ProjPSD\bigl(\tfrac12(A+A^\top)\bigr)$. For any collection $\{A_i\}_{i=1}^N\subset\R^{d\times d}$,
+		if we set $B_i:=T(A_i)$, then
+		\[
+		\frac1N\sum_{i=1}^N\normF{B_i-\bar B}^2
+		\le \frac1N\sum_{i=1}^N\normF{A_i-\bar A}^2,
+		\qquad\bar A:=\frac1N\sum_i A_i,\quad \bar B:=\frac1N\sum_i B_i.
+		\]
+		Equivalently, the Frobenius dispersion $D_H(B):=\sqrt{\frac1N\sum_i\normF{B_i-\bar B}^2}$ satisfies $D_H(B)\le D_H(A)$.
+	\end{lemma}
+	
+	
+	Define dispersion measures
+	\[
+	\Delta^g_k:=\frac1N\sum_{i=1}^N \norm{\tilde g_{i,k}-\tilde{\bar g}_k},\quad
+	\Delta^H_k:=\frac1N\sum_{i=1}^N \normtwo{\tilde H_{i,k}-\tilde{\bar H}_k},\quad
+	\Delta^\lambda_k:=\frac1N\sum_{i=1}^N \big|\tilde\lambda_{i,k}-\tilde{\bar\lambda}_k\big|,
+	\]
+	and $\underline\lambda_k:=\min_{1\le i\le N}\tilde\lambda_{i,k}$.
+	
+	\begin{lemma}[Step dispersion via resolvent identity]\label{lem:step-disp}
+		For every $k$,
+		\[
+		\norm{\bar s_k-s^{\mathrm{ref}}_k}
+		\le \frac{1}{\underline\lambda_k}\Delta^g_k
+		+\frac{\norm{\tilde{\bar g}_k}}{\underline\lambda_k\,\tilde{\bar\lambda}_k}\big(\Delta^H_k+\Delta^\lambda_k\big).
+		\]
+	\end{lemma}
+\begin{lemma}[Control of the regularization dispersion]\label{lem:delta_lambda_control}
+	Recall $\tilde\lambda_{i,k}=\lambda_{i,k}+\hat e_{i,k}$ and
+	$\tilde{\bar\lambda}_k=\frac1N\sum_{i=1}^N \tilde\lambda_{i,k}$, where
+	$\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$ and $\bar e_k:=\frac1N\sum_{i=1}^N \hat e_{i,k}$.
+Recall the dispersions $\Delta_k^\lambda$ and $\Delta_k^g$ defined above.
+	Assume the relative dispersion condition
+	\[
+	\max_{1\le i\le N}\|\tilde g_{i,k}-\tilde{\bar g}_k\|\le \alpha_d\|\tilde{\bar g}_k\|
+	\quad\text{for some }\alpha_d\in(0,1).
+	\]
+	Then for any $k$ with $\tilde{\bar g}_k\neq 0$,
+	\begin{equation}\label{eq:delta_lambda_bound}
+		\Delta_k^\lambda
+		\;\le\;
+		\frac{\sqrt{M}}{\sqrt{1-\alpha_d}}\cdot
+		\frac{\Delta_k^g}{\sqrt{\|\tilde{\bar g}_k\|}}
+		\;+\; 2\bar e_k.
+	\end{equation}
+\end{lemma}
+
+\begin{proof}
+	Write $\bar\lambda_k:=\frac1N\sum_{i=1}^N \lambda_{i,k}$ so that
+	$\tilde{\bar\lambda}_k=\bar\lambda_k+\bar e_k$.
+	By the triangle inequality,
+	\[
+	\big|\tilde\lambda_{i,k}-\tilde{\bar\lambda}_k\big|
+	=
+	\big|(\lambda_{i,k}-\bar\lambda_k)+(\hat e_{i,k}-\bar e_k)\big|
+	\le
+	|\lambda_{i,k}-\bar\lambda_k|+|\hat e_{i,k}-\bar e_k|.
+	\]
+	Averaging over $i$ yields
+	\begin{equation}\label{eq:dl_split}
+		\Delta_k^\lambda \le
+		\underbrace{\frac1N\sum_{i=1}^N |\lambda_{i,k}-\bar\lambda_k|}_{=:T_1}
+		+
+		\underbrace{\frac1N\sum_{i=1}^N |\hat e_{i,k}-\bar e_k|}_{=:T_2}.
+	\end{equation}
+	
+	\noindent\emph{Step 1: bound $T_1$.}
+	For any scalars $\{u_i\}_{i=1}^N$ with $\bar u=\frac1N\sum_i u_i$,
+	\[
+	\frac1N\sum_{i=1}^N |u_i-\bar u|
+	\le \frac{1}{N^2}\sum_{i=1}^N\sum_{j=1}^N |u_i-u_j|,
+	\]
+	because $|u_i-\bar u|=\big|\frac1N\sum_j(u_i-u_j)\big|\le \frac1N\sum_j|u_i-u_j|$.
+	Apply this with $u_i=\lambda_{i,k}$ to obtain
+	\[
+	T_1\le \frac{1}{N^2}\sum_{i=1}^N\sum_{j=1}^N |\lambda_{i,k}-\lambda_{j,k}|.
+	\]
+	Let $a_i:=\|\tilde g_{i,k}\|$. Then
+	\[
+	|\lambda_{i,k}-\lambda_{j,k}|
+	=\sqrt{M}\,|\sqrt{a_i}-\sqrt{a_j}|
+	=\sqrt{M}\,\frac{|a_i-a_j|}{\sqrt{a_i}+\sqrt{a_j}}.
+	\]
+	Moreover $|a_i-a_j|=\big|\|\tilde g_{i,k}\|-\|\tilde g_{j,k}\|\big|\le \|\tilde g_{i,k}-\tilde g_{j,k}\|$.
+	Using $\|\tilde g_{i,k}-\tilde g_{j,k}\|\le \|\tilde g_{i,k}-\tilde{\bar g}_k\|+\|\tilde g_{j,k}-\tilde{\bar g}_k\|$ and averaging over $(i,j)$ gives
+	\[
+	\frac{1}{N^2}\sum_{i,j}\|\tilde g_{i,k}-\tilde g_{j,k}\|
+	\le \frac{1}{N^2}\sum_{i,j}\Big(\|\tilde g_{i,k}-\tilde{\bar g}_k\|+\|\tilde g_{j,k}-\tilde{\bar g}_k\|\Big)
+	=2\Delta_k^g.
+	\]
+	Under the relative dispersion assumption,
+	$a_i\ge \|\tilde{\bar g}_k\|-\|\tilde g_{i,k}-\tilde{\bar g}_k\|\ge (1-\alpha_d)\|\tilde{\bar g}_k\|$,
+	hence $\sqrt{a_i}+\sqrt{a_j}\ge 2\sqrt{(1-\alpha_d)\|\tilde{\bar g}_k\|}$ for all $(i,j)$.
+	Therefore,
+	\[
+	T_1\le
+	\sqrt{M}\cdot
+	\frac{2\Delta_k^g}{2\sqrt{(1-\alpha_d)\|\tilde{\bar g}_k\|}}
+	=
+	\frac{\sqrt{M}}{\sqrt{1-\alpha_d}}\cdot
+	\frac{\Delta_k^g}{\sqrt{\|\tilde{\bar g}_k\|}}.
+	\]
+	
+	\noindent\emph{Step 2: bound $T_2$.}
+	Since $\hat e_{i,k}\ge 0$ for all $i$,
+	\[
+	\sum_{i=1}^N |\hat e_{i,k}-\bar e_k|
+	=
+	2\sum_{i:\ \hat e_{i,k}>\bar e_k} (\hat e_{i,k}-\bar e_k)
+	\le
+	2\sum_{i:\ \hat e_{i,k}>\bar e_k}\hat e_{i,k}
+	\le 2\sum_{i=1}^N \hat e_{i,k}=2N\bar e_k,
+	\]
+	so $T_2\le 2\bar e_k$.
+	Combine with \eqref{eq:dl_split}.
+\end{proof}
+	
+	\subsection{Inexact regularized Newton condition for the average step}
+	Set $\eta:=1/12$ and define
+	\[
+	r_k := (\nabla^2 f(\bar x_k)+\tilde{\bar\lambda}_k I)\bar s_k+\nabla f(\bar x_k).
+	\]
+	
+	\begin{proposition}[Inexact RN condition for the average step]\label{prop:inexact-rn}
+		Set $\eta:=1/12$.
+		Assume the following hold at iteration $k$:
+		\begin{enumerate}[leftmargin=1.2em,itemsep=2pt]
+			\item \textbf{Dispersion control:}
+			\[
+			\norm{\bar s_k-s^{\mathrm{ref}}_k}\le \frac{\eta}{8}\cdot \frac{\tilde{\bar\lambda}_k}{M_H+\tilde{\bar\lambda}_k}\,\norm{\bar s_k}.
+			\]
+			\item \textbf{Gradient bridge accuracy:}
+			\[
+			\frac{\norm{\tilde\Delta_k}}{\sqrt N}+L_1\sqrt{\tilde E_k}\le \frac{\eta}{8}\,\tilde{\bar\lambda}_k\norm{\bar s_k}.
+			\]
+			\item \textbf{Hessian bridge accuracy:}
+			\[
+			L_2\sqrt{\tilde E_k}+\bar e_k\le \frac{\eta}{8}\,\tilde{\bar\lambda}_k.
+			\]
+			\item \textbf{Hessian bound:} $\normtwo{\nabla^2 f(\bar x_k)}\le M_H$ (automatic by Assumption~\ref{ass:standing}(5)).
+		\end{enumerate}
+		Then
+		\[
+		\norm{r_k}\le \eta\,\tilde{\bar\lambda}_k\norm{\bar s_k},
+		\qquad\text{and}\qquad
+		L_2\norm{\bar s_k}\le \tilde{\bar\lambda}_k.
+		\]
+	\end{proposition}
+	
+	\subsection{Regularization comparability and heterogeneity absorption}
+	Let $g_k:=\nabla f(\bar x_k)$ and $\lambda_k:=\tilde{\bar\lambda}_k$.
+	
+	\begin{lemma}[Comparability of $\lambda_k$ to $\sqrt{M\|g_k\|}$]\label{lem:lambda-comparable}
+		Assume there exist $\alpha_b\in(0,1)$ and $\alpha_d\in(0,1)$ such that
+		\begin{align}
+			\label{eq:rel-bridge}
+			\norm{g_k-\tilde{\bar g}_k} &\le \alpha_b \norm{\tilde{\bar g}_k},\\
+			\label{eq:rel-disp}
+			\max_{1\le i\le N}\norm{\tilde g_{i,k}-\tilde{\bar g}_k} &\le \alpha_d \norm{\tilde{\bar g}_k}.
+		\end{align}
+		Assume also the absorption condition
+		\begin{equation}\label{eq:e-absorb}
+			\bar e_k\le \frac{\eta}{8}\lambda_k \qquad\text{for some }\eta\in(0,1).
+		\end{equation}
+		Then
+		\begin{equation}\label{eq:lambda-comp}
+			c_\lambda\sqrt{M\norm{g_k}}\le \lambda_k \le C_\lambda\sqrt{M\norm{g_k}},
+		\end{equation}
+		where
+		\[
+		c_\lambda:=\frac{\sqrt{1-\alpha_d}}{\sqrt{1+\alpha_b}},
+		\qquad
+		C_\lambda:=\frac{1}{1-\eta/8}\cdot \frac{\sqrt{1+\alpha_d}}{\sqrt{1-\alpha_b}}.
+		\]
+	\end{lemma}
+	
+	\subsection{Descent and complexity from inexact regularized Newton}
+	Define
+	\[
+	\Phi_k:=f(\bar x_k)-f_\star,\qquad g_k:=\nabla f(\bar x_k),\qquad \lambda_k:=\tilde{\bar\lambda}_k.
+	\]
+	
+	\begin{lemma}[One-step descent]\label{lem:descent-inexact}
+		Assume
+		\[
+		\norm{(\nabla^2 f(\bar x_k)+\lambda_k I)\bar s_k+g_k}\le \eta\,\lambda_k\norm{\bar s_k},
+		\qquad
+		L_2\norm{\bar s_k}\le \lambda_k,
+		\]
+		for some $\eta\in(0,1)$.
+		Then
+		\[
+		f(\bar x_{k+1})\le f(\bar x_k) - \Big(1-\eta-\frac16\Big)\lambda_k\norm{\bar s_k}^2.
+		\]
+	\end{lemma}
+	
+	\begin{lemma}[Gradient control]\label{lem:grad-inexact}
+		Under the conditions of Lemma~\ref{lem:descent-inexact},
+		\[
+		\norm{g_{k+1}}\le \Big(1+\eta+\frac12\Big)\lambda_k\norm{\bar s_k}.
+		\]
+	\end{lemma}
+	
+	Define steady/sharp sets:
+	\[
+	\mathcal I:=\left\{k\ge 0:\ \norm{g_{k+1}}\ge \frac14\norm{g_k}\right\},
+	\qquad
+	\mathcal S:=\left\{k\ge 0:\ \norm{g_{k+1}}< \frac14\norm{g_k}\right\}.
+	\]
+	
+	\begin{lemma}[Steady steps yield a $3/2$ recursion]\label{lem:steady-rec}
+		Assume Proposition~\ref{prop:inexact-rn} holds for all $k$ with some $\eta\le 1/12$ and that
+		\eqref{eq:rel-bridge}--\eqref{eq:rel-disp} and \eqref{eq:e-absorb} hold for all $k$ (fixed $\alpha_b,\alpha_d\in(0,1/2]$).
+		Then there exists $\tau>0$ such that for all $k\in\mathcal I$,
+		\[
+		\Phi_k-\Phi_{k+1}\ge \tau\,\Phi_k^{3/2}.
+		\]
+	\end{lemma}
+	
+	\begin{lemma}[Sharp steps are few]\label{lem:sharp-count}
+		Let $\varepsilon>0$ and $K_\varepsilon:=\min\{k:\ \norm{g_k}\le \varepsilon\}$.
+		Then
+		\[
+		|\mathcal S\cap\{0,1,\dots,K_\varepsilon-1\}|
+		\le \left\lceil \log_4\frac{\norm{g_0}}{\varepsilon}\right\rceil.
+		\]
+	\end{lemma}
+	
+	\begin{lemma}[Solving the $3/2$ recursion]\label{lem:telescoping}
+		If $\Phi_{k+1}\le \Phi_k-\tau \Phi_k^{3/2}$ for some $\tau>0$ and all $k$, then
+		$\Phi_k\le \frac{4}{\tau^2(k+2)^2}$.
+	\end{lemma}
+	
+	\begin{theorem}[Main complexity result]\label{thm:main}
+		Assume Assumption~\ref{ass:standing}.
+		Assume Proposition~\ref{prop:inexact-rn} holds for all $k$ with some $\eta\le 1/12$.
+		Assume also \eqref{eq:rel-bridge}--\eqref{eq:rel-disp} and \eqref{eq:e-absorb} hold for all $k$ (fixed $\alpha_b,\alpha_d\in(0,1/2]$).
+		Then:
+		\begin{enumerate}[leftmargin=1.2em,itemsep=2pt]
+			\item $\Phi_k=\cO(1/k^2)$.
+			\item $\norm{g_k}=\cO(1/k)$.
+			\item To reach $\norm{g_k}\le \varepsilon$, it suffices that $k=\cO(\varepsilon^{-1})$.
+		\end{enumerate}
+	\end{theorem}
+	
+	\subsection{Communication complexity under an explicit logarithmic schedule}\label{ssec:comm_schedule}
+	We now remove the remaining circularity in the mixing discussion by fixing an explicit schedule for
+	$(\tau_k,t_k)$ and proving that it enforces the accuracy conditions required by
+	Proposition~\ref{prop:inexact-rn} and Theorem~\ref{thm:main} after a finite burn-in.
+	
+	\noindent\textbf{Logarithmic schedule.}
+	Fix an exponent $p>2$ and define
+	\begin{equation}\label{eq:log_schedule}
+		\tau_k:=t_k:=\left\lceil \frac{p\,\log(k+2)}{-\log\rho}\right\rceil,\qquad k\ge 0.
+	\end{equation}
+	Then $\rho^{\tau_k}=\rho^{t_k}\le (k+2)^{-p}$ for all $k$.
+	
+	\noindent\textbf{Polynomial decay of dispersion drivers.}
+	Define the (post-mixing) dispersions
+	\[
+	D_X(k):=\sqrt{\frac1N\sum_{i=1}^N\norm{x_{i,k}-\bar x_k}^2},\qquad
+	D_G(k):=\sqrt{\frac1N\sum_{i=1}^N\norm{g_{i,k}-\bar g_k}^2},\qquad
+	D_H(k):=\sqrt{\frac1N\sum_{i=1}^N\normF{H_{i,k}-\bar H_k}^2},
+	\]
+	and their pre-mixed counterparts $D_X(\tilde X_k),D_G(\tilde G_k),D_H(\tilde H_k)$.
+	Appendix~\ref{app:dispersion} derives explicit recursions for $(D_X,D_G,D_H)$ and proves:
+	
+	\begin{proposition}[Dispersion decay under \eqref{eq:log_schedule}]\label{prop:dispersion_decay}
+		Under Assumption~\ref{ass:standing}, there exist finite constants $C_X,C_G,C_H>0$ such that for all $k\ge 0$,
+		\begin{align}
+			D_X(\tilde X_k) &\le \frac{C_X}{(k+2)^{p-1}},\qquad
+			D_G(\tilde G_k) &\le \frac{C_G}{(k+2)^{p-1}},\qquad
+			D_H(\tilde H_k) &\le \frac{C_H}{(k+2)^{p-1}}.
+		\end{align}
+		Consequently, $\Delta^g_k\le D_G(\tilde G_k)$ and $\Delta^H_k\le D_H(\tilde H_k)$.
+	\end{proposition}
+	
+	\begin{proposition}[Burn-in enforcement for a prescribed stationarity level]\label{prop:burnin_enforce}
+		Fix $p>2$ and use the schedule~\eqref{eq:log_schedule}. Fix any accuracy level $\varepsilon>0$ satisfying
+		\begin{equation}\label{eq:eps_floor}
+			\varepsilon_{\mathrm{floor}}
+			:=\max\left\{
+			\frac{16\,\sigma_g}{\sqrt N},\ 
+			\frac{61440\,\bar e_{\max}^2}{M},\
+			\left(\frac{960\sqrt{5/3}\,M_H\,\sigma_g}{\sqrt{MN}}\right)^{\!\!2/3},\
+			\left(\frac{1920\sqrt{5/3}\,M_H^2\,\bar e_{\max}}{M^{3/2}}\right)^{\!\!2/3}
+			\right\}.
+		\end{equation}
+		Then there exists an integer $K_0(\varepsilon)\ge 0$ (explicitly given in Appendix~\ref{app:dispersion}) such that
+		for every $k\ge K_0(\varepsilon)$ with $\norm{\nabla f(\bar x_k)}\ge \varepsilon$, the following three statements hold:
+		\begin{enumerate}[leftmargin=1.2em,itemsep=2pt]
+			\item the relative bridge and dispersion conditions \eqref{eq:rel-bridge}--\eqref{eq:rel-disp} hold with fixed constants
+			$\alpha_b=\alpha_d=1/4$;
+			\item the Hessian absorption condition \eqref{eq:e-absorb} holds with the fixed choice $\eta:=1/12$; moreover, the Hessian bridge accuracy in Proposition~\ref{prop:inexact-rn}(3) holds with the same $\eta$;
+			\item the inexact regularized Newton conditions of Proposition~\ref{prop:inexact-rn} hold (with the same $\eta$).
+		\end{enumerate}
+		Consequently, on the index set $\{k\ge K_0(\varepsilon):\ \norm{\nabla f(\bar x_k)}\ge \varepsilon\}$,
+		all hypotheses of Theorem~\ref{thm:main} are satisfied.
+	\end{proposition}
+	
+	\begin{theorem}[End-to-end complexity under an explicit schedule]\label{thm:end2end}
+		Assume Assumption~\ref{ass:standing}. Fix $p>2$ and run \textsc{DisGrem} with the schedule~\eqref{eq:log_schedule}.
+		Let $\varepsilon>0$ satisfy \eqref{eq:eps_floor}.
+		Define the first $\varepsilon$-stationary index
+		\[
+		K(\varepsilon):=\min\{k\ge 0:\ \norm{\nabla f(\bar x_k)}\le \varepsilon\}.
+		\]
+		Then there exist constants $C_\Phi,C_g,C_K>0$ (depending only on the problem and network parameters in Assumption~\ref{ass:standing} and on $p$) such that:
+		\begin{enumerate}[leftmargin=1.2em,itemsep=2pt]
+			\item (Functional decay above the floor) for all $0\le k\le K(\varepsilon)$,
+			\[
+			\Phi_k\le \frac{C_\Phi}{(k+2)^2};
+			\]
+			\item (Gradient decay above the floor) for all $0\le k\le K(\varepsilon)$,
+			\[
+			\norm{\nabla f(\bar x_k)}\le \frac{C_g}{k+2};
+			\]
+			\item (Iteration complexity) $K(\varepsilon)\le C_K\,\varepsilon^{-1}$.
+		\end{enumerate}
+	\end{theorem}
+	\begin{theorem}[Total mixing rounds] \label{thm:comm}
+		Assume the hypotheses of Theorem~\ref{thm:end2end} (in particular, the explicit schedule~\eqref{eq:log_schedule}).
+		Let $K(\varepsilon):=\min\{k:\ \norm{\nabla f(\bar x_k)}\le \varepsilon\}$. Then
+		\[
+		\sum_{k=0}^{K(\varepsilon)-1}(\tau_k+t_k)
+		=\cO\bigl(\varepsilon^{-1}\log(\varepsilon^{-1})\bigr)
+		\]
+		for any $\varepsilon$ above the accuracy floor.
+	\end{theorem}
+	
+	
+	\section{Numerical Experiments}\label{sec:experiments}
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	
+	We evaluate \textsc{DisGrem} and four variants against a comprehensive suite of first- and
+	second-order decentralized baselines across 15 benchmark objectives spanning
+	well-conditioned and ill-conditioned convex problems, real-data tasks, and non-convex landscapes.
+	
+	% ─────────────────────────────────────────────────────────────────────
+	\subsection{Experimental setup}\label{ssec:setup}
+	% ─────────────────────────────────────────────────────────────────────
+	
+	\noindent\textbf{Network.}
+	We use $N=10$ agents on a random geometric graph with connection radius $r_0=0.5$
+	in the unit square (regenerated per trial).
+	The Metropolis--Hastings doubly stochastic matrix $W$ is formed from the resulting
+	adjacency; the spectral norm $\rho=\normtwo{W-\J}\approx 0.92$ (i.e.\ the
+	second-largest absolute eigenvalue of $W$), representing a moderately sparse,
+	weakly connected topology with spectral gap $1-\rho\approx 0.08$.
+	All algorithms perform $N_c=3$ consensus rounds per outer iteration ($\tau_k=t_k=3$).
+	
+	\noindent\textbf{Algorithms.}
+	We compare 10 algorithms in three groups.
+	
+	\noindent\textit{Proposed (\textsc{DisGrem} family)}:
+	\textbf{DisGrem} (Algorithm~\ref{alg:disgrem}), its compressed-Hessian variant \textbf{CeDisGrem}
+	(top-$r$ spectral compression of Hessian corrections, Section~\ref{ssec:variants}),
+	the adaptive-$M$ variant \textbf{AdaDisGrem}, and its compressed version \textbf{CeAdaDisGrem}.
+	The regularization parameter is set to $M = M_{\mathrm{fac}} \cdot \hat L$
+	where $\hat L$ estimates the gradient Lipschitz constant
+	(with $M_{\mathrm{fac}}$ studied in Section~\ref{ssec:param}).
+	
+	\noindent\textit{First-order baselines}:
+	\textbf{EXTRA}~\citep{shi2015extra} (exact first-order decentralized method),
+	\textbf{DIGing}~\citep{nedic2017diging} (gradient-tracking DGD),
+	and \textbf{DGD+GT} (standard DGD enhanced with gradient tracking~\citep{nedic2009subgradient}).
+	EXTRA uses its canonical step size $\alpha\approx 1/(2L)$;
+	DIGing uses $\alpha\approx 0.5/L$; DGD+GT uses $\alpha=0.2/L$.
+	
+	\noindent\textit{Second-order baselines}:
+	\textbf{DQM}~\citep{eisen2017dqn} (decentralized quasi-Newton),
+	\textbf{ESOM} (exact second-order method with network Newton--style Hessian~\citep{mokhtari2015networknewton_arxiv}),
+	and \textbf{NT} (Newton Tracking~\citep{mokhtari2020newtontracking}).
+	All second-order baselines use their published default stepsizes.
+	
+	\noindent\textbf{Test objectives.}
+	We use 15 objectives in two groups (dimension $d=10$ unless noted).
+	\textit{Convex} ($9$ problems): (i)~Ridge regression (\textsc{Ridge}); (ii)~ill-conditioned
+	quadratic (\textsc{QuadBad}, $\kappa=10^3$); (iii)~log-sum-exp (\textsc{LSE}); (iv)~Huber loss;
+	(v)~Tsallis entmax (\textsc{EntMax}); (vi)~log-linear (\textsc{LinLog});
+	(vii)~pseudo-Huber + quadratic (\textsc{AbsQuad}, smoothing scale $\delta=0.5$);
+	(viii)~$\ell_2$-regularized logistic regression on a real LibSVM dataset
+	(\textsc{LR-real}, $d=22$); (ix)~least-squares regression on the scikit-learn
+	Diabetes dataset (\textsc{LS-real}).
+	\textit{Non-convex} ($6$ problems): Rosenbrock, Styblinski--Tang, Ackley,
+	SinQuad, CosMix, and a non-convex variant of logistic regression (\textsc{LR-ncvr}).
+	Reference optima are computed by high-precision LBFGS-B (tolerance $10^{-15}$) with multiple restarts.
+	
+	\noindent\textbf{Stopping criterion and metrics.}
+	All algorithms run to a maximum of $K_{\max}$ iterations (500--2000, depending on problem
+	difficulty) or until the \emph{combo} criterion $\|\bar g_k\|+\mathrm{cons}_k < 10^{-12}$
+	is satisfied, where $\bar g_k$ is the tracked gradient average and $\mathrm{cons}_k$ is the
+	per-agent disagreement.
+	We report: (a)~\emph{Steps}: outer iterations to stopping;
+	(b)~\emph{combo}: $\min_k(\|\bar g_k\|+\mathrm{cons}_k)$;
+	(c)~\emph{relF}: $\min_k |f(\bar x_k)-f^\star|/|f(\bar x_0)-f^\star|$; and
+	(d)~\emph{Comm}: average total communication in MB.
+	Analytical gradients and Hessians are used whenever available.
+
+	\noindent\textbf{Fairness and reproducibility protocol.}
+	To ensure a fair comparison, all methods share the same network realization per trial,
+	initialization policy, stopping tolerance, and communication accounting rule
+	(per-agent MB over all neighbor exchanges).
+	Every method is run from identical random seeds for each trial.
+	Unless explicitly varied in a sensitivity study, hyperparameters follow either
+	(i) published default recommendations or (ii) a single global rule (e.g., $M=M_{\mathrm{fac}}\hat L$)
+	applied uniformly across problems.
+	We emphasize that no per-problem hand-retuning is performed for baselines beyond
+	their standard stable range.
+	
+	% ─────────────────────────────────────────────────────────────────────
+	\subsection{Convergence on convex benchmarks}\label{ssec:convex}
+	% ─────────────────────────────────────────────────────────────────────
+	
+	Table~\ref{tab:main} summarises results on seven representative convex objectives.
+	Figure~\ref{fig:multiobj} shows iteration-vs-combo convergence curves across
+	all 15 objectives (9 convex + 6 non-convex).
+	
+	\begin{table}[t]
+		\centering
+		\caption{Convergence on convex benchmarks ($N=10$, $d=10$ or $22$).
+			\textbf{Steps}: outer iterations at stopping (or $K_{\max}$ if not converged;
+			$K_{\max}=500$ for Ridge/Huber/LinLog/LS-real, $800$ for LSE, $2000$ for EntMax/LR-real).
+			\textbf{combo}: $\min_k(\|\bar g_k\|+\mathrm{cons}_k)$; $\checkmark$ denotes combo $<10^{-12}$.
+			\textbf{MB}: per-agent total communication in megabytes.
+			Bold rows = proposed methods.}
+		\label{tab:main}
+		\setlength{\tabcolsep}{4pt}
+		\resizebox{\textwidth}{!}{%
+			\begin{tabular}{l ccc ccc ccc ccc ccc ccc ccc}
+				\toprule
+				& \multicolumn{3}{c}{\textsc{Ridge}}
+				& \multicolumn{3}{c}{\textsc{LSE}}
+				& \multicolumn{3}{c}{\textsc{Huber}}
+				& \multicolumn{3}{c}{\textsc{EntMax}}
+				& \multicolumn{3}{c}{\textsc{LinLog}}
+				& \multicolumn{3}{c}{\textsc{LR-real}}
+				& \multicolumn{3}{c}{\textsc{LS-real}} \\
+				\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}%
+				\cmidrule(lr){11-13}\cmidrule(lr){14-16}\cmidrule(lr){17-19}\cmidrule(lr){20-22}
+				Algorithm & Steps & combo & MB & Steps & combo & MB & Steps & combo & MB
+				& Steps & combo & MB & Steps & combo & MB & Steps & combo & MB
+				& Steps & combo & MB \\
+				\midrule
+				\multicolumn{22}{l}{\textit{Proposed}} \\
+				\textbf{DisGrem}      & 416 & $\checkmark$ & 4.3
+				& 441 & $\checkmark$ & 4.6
+				& 378 & $\checkmark$ & 3.9
+				& 689 & $\checkmark$ & 7.1
+				& 271 & $\checkmark$ & 2.8
+				& 1273 & $\checkmark$ & 59.7
+				& 500 & $8\times10^{-5}$ & 5.2 \\
+				\textbf{CeDisGrem}    & 412 & $\checkmark$ & 2.9
+				& 429 & $\checkmark$ & 3.0
+				& 428 & $\checkmark$ & 3.0
+				& 766 & $\checkmark$ & 5.3
+				& 329 & $\checkmark$ & 2.3
+				& 1578 & $\checkmark$ & 49.4
+				& 500 & $10^{-8}$    & 3.5 \\
+				\textbf{AdaDisGrem}   & 423 & $\checkmark$ & 4.4
+				& 402 & $\checkmark$ & 4.2
+				& 386 & $\checkmark$ & 4.0
+				& 704 & $\checkmark$ & 7.3
+				& 275 & $\checkmark$ & 2.8
+				& 1343 & $\checkmark$ & 62.9
+				& 500 & $9\times10^{-5}$ & 5.2 \\
+				\textbf{CeAdaDisGrem} & 421 & $\checkmark$ & 2.9
+				& 376 & $\checkmark$ & 2.6
+				& 439 & $\checkmark$ & 3.0
+				& 779 & $\checkmark$ & 5.4
+				& 337 & $\checkmark$ & 2.3
+				& 1645 & $\checkmark$ & 51.5
+				& 500 & $8\times10^{-8}$ & 3.5 \\
+				\midrule
+				\multicolumn{22}{l}{\textit{First-order baselines}} \\
+				EXTRA  & 500  & $4\times10^{-6}$ & 1.6
+				& 800  & $7\times10^{-8}$ & 2.5
+				& 500  & $1\times10^{-2}$ & 1.6
+				& 2000 & $3\times10^{-4}$ & 6.3
+				& 500  & $2\times10^{-2}$ & 1.6
+				& 2000 & $2.1$            & 15.1
+				& 500  & $1\times10^{-3}$ & 1.6 \\
+				DIGing & 500  & $5\times10^{-1}$ & 3.4
+				& 800  & $6\times10^{-5}$ & 5.5
+				& 500  & $1\times10^{-1}$ & 3.4
+				& 2000 & $4\times10^{-3}$ & 13.7
+				& 500  & $5\times10^{-1}$ & 3.4
+				& 2000 & $3.9\times10^{-1}$ & 62.4
+				& 500  & $6\times10^{-3}$ & 3.4 \\
+				DGD+GT & 500  & $6\times10^{-1}$ & 3.4
+				& 800  & $4\times10^{-3}$ & 5.5
+				& 500  & $7\times10^{-1}$ & 3.4
+				& 2000 & $4\times10^{-2}$ & 13.7
+				& 500  & $3.4$            & 3.4
+				& 2000 & $4\times10^{-11}$ & 62.5
+				& 500  & $3\times10^{-2}$ & 3.4 \\
+				\midrule
+				\multicolumn{22}{l}{\textit{Second-order baselines}} \\
+				DQM   & 500  & $4\times10^{-2}$ & 4.0
+				& 800  & $6\times10^{-2}$ & 6.4
+				& 500  & $5\times10^{-1}$ & 4.0
+				& 2000 & $3\times10^{-1}$ & 11.2
+				& 500  & $9\times10^{-1}$ & 4.0
+				& 2000 & $1\times10^{-2}$ & 72.9
+				& 500  & $3\times10^{-2}$ & 4.0 \\
+				ESOM  & 500  & $4\times10^{-2}$ & 10.3
+				& 800  & $7\times10^{-2}$ & 16.5
+				& 500  & $6.2$            & 10.3
+				& 2000 & $2.0$            & 37.5
+				& 500  & $897$            & 10.3
+				& 2000 & $9.9\times10^{-3}$ & 187.4
+				& 500  & $3\times10^{-2}$ & 10.3 \\
+				NT    & 500  & $6\times10^{-2}$ & 1.2
+				& 800  & $1.5$            & 1.8
+				& 500  & $3.8$            & 1.2
+				& 2000 & $2.2$            & 4.6
+				& 500  & $3.3$            & 1.2
+				& 2000 & $7.6\times10^{-1}$ & 20.8
+				& 500  & $6.6\times10^{-1}$ & 1.2 \\
+				\bottomrule
+		\end{tabular}}
+	\end{table}
+	
+	\begin{figure}[t]
+		\centering
+		\begin{subfigure}[b]{0.49\textwidth}
+			\safeincludegraphics[width=\textwidth]{multiobj_steps_vs_combo}
+			\caption{Steps vs.\ combo ($\|\bar g\|+\mathrm{cons}$)}
+		\end{subfigure}
+		\hfill
+		\begin{subfigure}[b]{0.49\textwidth}
+			\safeincludegraphics[width=\textwidth]{multiobj_commCost_vs_relF}
+			\caption{Communication (MB) vs.\ relF}
+		\end{subfigure}
+		\caption{Convergence curves across all 15 benchmarks (9 convex + 6 non-convex).
+			Each panel shows one function; shared legend at bottom.
+			Proposed algorithms (\textbf{bold lines}) consistently reach combo~$<10^{-12}$
+			on the convex suite, while first-order baselines often stagnate on weakly connected graphs.}
+		\label{fig:multiobj}
+	\end{figure}
+	
+	\noindent\textbf{Key observations.}
+	\begin{enumerate}[leftmargin=1.4em,itemsep=2pt]
+		\item \textbf{Proposed algorithms converge to machine precision on all well-conditioned convex problems.}
+		All four variants achieve combo~$<10^{-12}$ on Ridge (412--423 steps),
+		LSE (376--441), Huber (378--439), EntMax (689--779), and LinLog (271--337).
+		On the real-data task LR-real ($d=22$), all four converge within 1273--1645 steps.
+		On LS-real, compressed variants reach combo~$\approx10^{-8}$ (within $K_{\max}=500$),
+		while uncompressed variants are slightly slower to converge on this mildly ill-conditioned
+		problem, illustrating the benefit of Hessian compression for larger residuals.
+		
+		\item \textbf{EXTRA is the strongest first-order baseline yet substantially slower.}
+		On Ridge, EXTRA reaches combo~$\approx 4\times10^{-6}$ after $K_{\max}=500$ steps---six
+		orders of magnitude above machine precision---while our algorithms converge fully in 412--423 steps.
+		On EntMax, EXTRA needs all 2000 steps and still achieves only combo~$\approx 3\times10^{-4}$;
+		our methods converge in 689--779 steps.
+		Although EXTRA's per-iteration communication (two $d$-vectors per consensus round) is
+		lower than ours (one vector plus one Hessian matrix), the large iteration disparity
+		more than offsets this advantage: EXTRA still fails to satisfy the target stopping criterion
+		on harder tasks even after exhausting the full communication budget.
+		
+		\item \textbf{DIGing and DGD+GT struggle on weakly connected networks.}
+		Both first-order gradient-tracking methods fail to make significant progress on Ridge and LinLog
+		within 500 iterations (combo $\approx 0.5$--$3.4$).
+		The underlying cause is the small spectral gap ($1-\rho\approx0.08$):
+		first-order consensus-gradient methods require $\cO((1-\rho)^{-2})$ additional iterations
+		to suppress disagreement~\citep{nedic2009subgradient},
+		whereas the Hessian-regularized Newton step in \textsc{DisGrem} produces far larger
+		per-step progress, rendering the algorithm less sensitive to network connectivity.
+		
+		\item \textbf{Second-order baselines are inconsistent across function classes.}
+		DQM and ESOM perform reasonably on Ridge but diverge or stagnate on LinLog, Huber, and EntMax.
+		Newton Tracking (NT) struggles on LSE and LR-real due to Hessian rank deficiency
+		and ill-conditioning.
+		Our methods are the only ones achieving combo~$<10^{-12}$ consistently across all
+		well-conditioned convex problems.
+		
+		\item \textbf{Communication efficiency.}
+		The compressed variants CeDisGrem and CeAdaDisGrem reduce communication by
+		$30$--$50\%$ relative to their uncompressed counterparts (e.g.\ Ridge: 2.9\,MB vs.\ 4.3\,MB)
+		with negligible impact on iteration count, confirming that Hessian compression is effective.
+	\end{enumerate}
+
+	\begin{table}[t]
+		\centering
+		\caption{Mechanism-level ablation on representative convex tasks.
+			$\Delta$Steps and $\Delta$MB are relative changes versus \textbf{DisGrem}
+			(negative is better).}
+		\label{tab:ablation}
+		\begin{tabular}{lcccc}
+			\toprule
+			Task & CeDisGrem $\Delta$Steps & CeDisGrem $\Delta$MB & AdaDisGrem $\Delta$Steps & AdaDisGrem $\Delta$MB \\
+			\midrule
+			Ridge   & $-1.0\%$  & $-32.6\%$ & $+1.7\%$ & $+2.3\%$ \\
+			LSE     & $-2.7\%$  & $-34.8\%$ & $-8.8\%$ & $-8.7\%$ \\
+			EntMax  & $+11.2\%$ & $-25.4\%$ & $+2.2\%$ & $+2.8\%$ \\
+			LR-real & $+23.9\%$ & $-17.3\%$ & $+5.5\%$ & $+5.4\%$ \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+	
+	\noindent\textbf{Non-convex problems.}
+	Although our convergence theory (Theorem~\ref{thm:end2end}) requires convexity,
+	we include non-convex benchmarks to test practical behavior.
+	Figure~\ref{fig:multiobj} includes two non-convex functions (Rosenbrock, Styblinski--Tang)
+	where DisGrem family curves are plotted.
+	On Rosenbrock, DisGrem and AdaDisGrem converge in 107 and 156 steps to
+	combo~$<10^{-13}$ and relF~$\approx 10^{-20}$.
+	On Styblinski--Tang (a standard multimodal benchmark), all four variants reach
+	combo~$<10^{-9}$ within 1000 steps; first-order methods fail entirely
+	(EXTRA: combo~$=18.5$, DGD+GT: combo~$>100$).
+	On SinQuad and CosMix the DisGrem family reliably finds a stationary point
+	(combo~$<10^{-11}$), while the first-order baselines stagnate.
+	These results suggest that the regularized Newton structure provides sufficient
+	implicit regularization to navigate non-convex landscapes in practice,
+	though formal non-convex guarantees are left for future work.
+	
+	% ─────────────────────────────────────────────────────────────────────
+	\subsection{Monte-Carlo robustness study}\label{ssec:robust}
+	% ─────────────────────────────────────────────────────────────────────
+	
+	To assess sensitivity to initialisation, we run $n_s=10$ independent trials on the
+	Ridge problem with different random seeds (both initial point and network topology).
+	A trial is declared \emph{successful} if relF $<10^{-5}$ is achieved within 1000 iterations.
+	Table~\ref{tab:robust} reports success rate, average steps (over successful runs),
+	and average wall-clock time; Figure~\ref{fig:robust} visualises the results.
+	
+	\begin{table}[h]
+		\centering
+		\caption{Monte-Carlo robustness on Ridge ($N=10$, $d=10$, $n_s=10$ trials).
+			\textbf{Succ}: success rate (\%). \textbf{Avg-K}: mean steps over successful runs.
+			\textbf{Avg-t}: mean wall-clock time over successful runs (seconds).}
+		\label{tab:robust}
+		\begin{tabular}{lccc}
+			\toprule
+			Algorithm & Succ (\%) & Avg-K & Avg-t (s) \\
+			\midrule
+			\textbf{DisGrem}    & \textbf{100} & \textbf{30.6} & 0.07 \\
+			\textbf{CeDisGrem}  & \textbf{100} & \textbf{22.3} & 0.05 \\
+			EXTRA               & 100          & 162.6         & 1.46 \\
+			DIGing              & 20           & 339.5         & 3.22 \\
+			DGD+GT              & 0            & ---           & --- \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+	
+	\begin{figure}[h]
+		\centering
+		\safeincludegraphics[width=0.55\textwidth]{robust_ridge}
+		\caption{Robustness study on Ridge ($n_s=10$ random starts).
+			Left: success rate per algorithm; right: box plot of steps for successful runs.}
+		\label{fig:robust}
+	\end{figure}
+	
+	The results are striking.
+	\textbf{DisGrem and CeDisGrem achieve 100\% success with a mean of only 30.6 and 22.3 steps},
+	roughly $5\times$ and $7\times$ fewer than EXTRA (162.6 steps, also 100\% success).
+	DIGing succeeds in only 2 out of 10 runs, and DGD+GT \emph{never} converges within budget.
+	This illustrates that the weak spectral gap ($1-\rho\approx0.08$) is catastrophic for
+	first-order gradient-tracking methods but is naturally handled by our second-order scheme.
+	To quantify uncertainty under finite trials, the 95\% Clopper--Pearson interval for success rate is
+	$[69.1\%,100\%]$ for DisGrem/CeDisGrem/EXTRA (10/10), $[2.5\%,55.6\%]$ for DIGing (2/10),
+	and $[0\%,30.8\%]$ for DGD+GT (0/10), confirming a statistically meaningful separation.
+	
+	% ─────────────────────────────────────────────────────────────────────
+	\subsection{Scalability}\label{ssec:scale}
+	% ─────────────────────────────────────────────────────────────────────
+	
+	We examine how each algorithm scales as (a) the number of agents $N$ grows and
+	(b) the problem dimension $d$ grows, using Ridge as the benchmark.
+	
+	\noindent\textbf{Varying $N$ ($d=10$ fixed).}
+	Figure~\ref{fig:scale_N} and Table~\ref{tab:scale_N} report steps to convergence for
+	$N\in\{5,10,20,50\}$.
+	The DisGrem family converges in 26--353 steps across all sizes, with step counts
+	\emph{decreasing} as $N$ grows (90--120 steps at $N=50$)---a consequence of more agents
+	providing richer curvature information.
+	EXTRA converges in 833--868 steps regardless of $N$, showing much weaker dependence on agent count.
+	DIGing and DGD+GT do not converge within 1500 steps for any $N$.
+	Across all tested $N$, the proposed methods retain a large margin over first-order methods,
+	indicating that increasing agent count does not destabilize second-order tracking dynamics.
+	
+	\begin{table}[h]
+		\centering
+		\caption{Steps to convergence (combo $<10^{-10}$) vs.\ number of agents $N$
+			($d=10$, Ridge). ``NC'' = not converged within 1500 steps.}
+		\label{tab:scale_N}
+		\begin{tabular}{lrrrr}
+			\toprule
+			Algorithm      & $N=5$ & $N=10$ & $N=20$ & $N=50$ \\
+			\midrule
+			\textbf{DisGrem}    & 67  & 307 & 136 & 90  \\
+			\textbf{CeDisGrem}  & 26  & 353 & 149 & 120 \\
+			\textbf{AdaDisGrem} & 70  & 303 & 139 & 94  \\
+			\textbf{CeAdaDisGrem} & 29 & 351 & 149 & 121 \\
+			EXTRA               & 846 & 868 & 852 & 833 \\
+			DIGing              & NC  & NC  & NC  & NC  \\
+			DGD+GT              & NC  & NC  & NC  & NC  \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+	
+	\noindent\textbf{Varying $d$ ($N=10$ fixed).}
+	Figure~\ref{fig:scale_d} shows steps and wall-clock time for $d\in\{10,30,50,100\}$.
+	DisGrem and CeDisGrem converge for all values of $d$:
+	step counts remain in the range 207--738, and CeDisGrem consistently converges faster
+	than DisGrem for larger $d$ (685 vs.\ 738 at $d=100$) with substantially lower
+	communication (108\,MB vs.\ 172\,MB), confirming that Hessian compression becomes
+	increasingly beneficial as dimension grows.
+	EXTRA, DIGing, and DGD+GT fail to converge for $d\ge30$.
+	This trend is consistent with the communication model in Section~\ref{ssec:comm}:
+	the Hessian payload scales quadratically with $d$, so low-rank transmission brings larger gains
+	in high dimensions.
+	
+	\begin{figure}[t]
+		\centering
+		\begin{subfigure}[b]{0.49\textwidth}
+			\safeincludegraphics[width=\textwidth]{scalability_N_steps_ridge}
+			\caption{Steps vs.\ $N$ ($d=10$ fixed)}
+			\label{fig:scale_N}
+		\end{subfigure}
+		\hfill
+		\begin{subfigure}[b]{0.49\textwidth}
+			\safeincludegraphics[width=\textwidth]{scalability_d_steps_ridge}
+			\caption{Steps vs.\ $d$ ($N=10$ fixed)}
+			\label{fig:scale_d}
+		\end{subfigure}
+		\caption{Scalability of DisGrem family (solid) vs.\ EXTRA (dashed) on Ridge.
+			``NC'' entries (DIGing, DGD+GT) are omitted from the plot as they never converge.
+			Note log scale on $y$-axis.}
+		\label{fig:scalability}
+	\end{figure}
+	
+	% ─────────────────────────────────────────────────────────────────────
+	\subsection{Sensitivity to the regularisation parameter $M$}\label{ssec:param}
+	% ─────────────────────────────────────────────────────────────────────
+	
+	We sweep $M_{\mathrm{fac}}\in\{0.05,\,0.1,\,0.5,\,1.0,\,3.0\}\times L_{\max}$
+	for four representative algorithms on Ridge ($N=10$, $d=10$).
+	Figure~\ref{fig:param} shows steps-vs-combo curves for DisGrem and EXTRA;
+	Figure~\ref{fig:param_ce} shows CeDisGrem and DIGing.
+	
+	\begin{figure}[t]
+		\centering
+		\begin{subfigure}[b]{0.49\textwidth}
+			\safeincludegraphics[width=\textwidth]{DisGrem_steps_vs_combo}
+			\caption{\textbf{DisGrem}: all $M_{\mathrm{fac}}$ converge}
+		\end{subfigure}
+		\hfill
+		\begin{subfigure}[b]{0.49\textwidth}
+			\safeincludegraphics[width=\textwidth]{EXTRA_steps_vs_combo}
+			\caption{EXTRA: only the theoretically tuned step size converges; aggressive steps diverge}
+		\end{subfigure}
+		\caption{Parameter sensitivity on Ridge.
+			For DisGrem, each curve corresponds to one value of $M_{\mathrm{fac}}$;
+			for EXTRA, each curve corresponds to one step-size multiplier $c_\alpha\in\{0.2,0.5,1.0,2.0,5.0\}$
+			times the reference step $1/(2L)$.
+			\textbf{DisGrem converges for all five $M_{\mathrm{fac}}$ settings}; the rate
+			improves as $M_{\mathrm{fac}}$ grows from $0.05$ to $1.0$, consistent with the
+			theoretical prediction that larger $M$ expands the admissible heterogeneity regime.
+			EXTRA's safe range is narrow: only the reference step size converges; doubling or halving leads to stagnation or divergence.}
+		\label{fig:param}
+	\end{figure}
+	
+	\begin{figure}[t]
+		\centering
+		\begin{subfigure}[b]{0.49\textwidth}
+			\safeincludegraphics[width=\textwidth]{CeDisGrem_steps_vs_combo}
+			\caption{\textbf{CeDisGrem}: all $M_{\mathrm{fac}}$ converge}
+		\end{subfigure}
+		\hfill
+		\begin{subfigure}[b]{0.49\textwidth}
+			\safeincludegraphics[width=\textwidth]{DIGing_steps_vs_combo}
+			\caption{DIGing: sensitive to step size}
+		\end{subfigure}
+		\caption{Parameter sensitivity (continued).
+			For CeDisGrem, each curve is one $M_{\mathrm{fac}}$ value; for DIGing, each curve is one
+			step-size multiplier.
+			\textbf{CeDisGrem} mirrors DisGrem's robustness while reducing communication by 30--50\%.
+			\textbf{DIGing}'s convergence is highly sensitive to step size: three of five configurations
+			fail to converge within budget.}
+		\label{fig:param_ce}
+	\end{figure}
+	
+	\noindent\textbf{Discussion.}
+	All four DisGrem-family algorithms converge for every tested $M_{\mathrm{fac}}$,
+	with the fastest convergence around $M_{\mathrm{fac}}\in[0.5,1.0]$.
+	This robustness is consistent with the theoretical analysis: $M$ acts as a
+	pure amplification constant that enlarges the admissible heterogeneity regime
+	(the discussion in Section~\ref{sec:theory}) and does not appear as an explicit stepsize.
+	In contrast, EXTRA and DIGing are highly sensitive to their respective step-size
+	parameters: both show divergence or prolonged stagnation when the step size deviates
+	from its theoretically prescribed value by a factor of 2--5,
+	confirming that their convergence guarantees are inherently tied to exact step-size tuning.
+
+	% ─────────────────────────────────────────────────────────────────────
+	\subsection{What the experiments validate (and what they do not)}\label{ssec:exp_validity}
+	% ─────────────────────────────────────────────────────────────────────
+
+	\noindent\textbf{Validated claims.}
+	The empirical evidence supports three central claims of this paper:
+	(i) robust high-accuracy convergence of DisGrem-family methods on weakly connected networks,
+	(ii) communication--accuracy benefits of Hessian compression, and
+	(iii) broad parameter stability with respect to $M$.
+
+	\noindent\textbf{Current limitations.}
+	Two limitations remain: first, the strongest robustness analysis is currently reported on Ridge only;
+	second, all experiments are deterministic/full-batch and do not cover stochastic gradients/Hessians.
+	These are important extensions for a camera-ready large-scale ML benchmark suite.
+
+	\noindent\textbf{Immediate next experimental add-ons.}
+	To further strengthen the paper for top-journal review, the highest-priority add-ons are:
+	(1) robustness trials on at least two additional objectives (one convex ill-conditioned, one non-convex),
+	(2) a larger network sweep including denser and sparser graphs at fixed $N$,
+	and (3) one real high-dimensional dataset ($d\gg 100$) to stress communication scaling.
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\section{Conclusion}
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	
+	\noindent\textbf{Summary.}
+	We proposed \textsc{DisGrem}, a fully decentralized, stepsize-free second-order optimization
+	method that combines gradient tracking, Hessian tracking with PSD projection,
+	and two-stage mixing.
+	The key analytical contribution is a \emph{reference-step framework} that resolves the
+	non-commutativity between network averaging and Newton-system inversion,
+	reducing the average iterate's dynamics to an \emph{inexact regularized Newton} recursion.
+	By quantifying Hessian heterogeneity via the bounded constant $\sigma_H$ on the relevant level set
+	and choosing $\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}$ with $M\ge L_2$,
+	we prove:
+	\begin{itemize}[leftmargin=1.2em,itemsep=2pt]
+		\item $\Phi_k = \cO(1/k^2)$ functional decay and $\cO(\varepsilon^{-1})$ iteration complexity,
+		matching the centralized regularized Newton rate;
+		\item $\cO(\varepsilon^{-1}\log(\varepsilon^{-1}))$ total neighbor-communication rounds
+		under a logarithmic accuracy schedule.
+	\end{itemize}
+	
+	\noindent\textbf{Experimental findings.}
+	Extensive experiments across 15 benchmark objectives substantiate the theory:
+	\begin{itemize}[leftmargin=1.2em,itemsep=2pt]
+		\item \textsc{DisGrem} and its variants are the \emph{only} algorithms achieving
+		combo~$<10^{-12}$ (gradient norm plus consensus residual) on all tested convex problems,
+		with $5$--$8\times$ fewer iterations than EXTRA and orders-of-magnitude better accuracy
+		than DQM, ESOM, and Newton Tracking.
+		\item On weakly connected networks ($\rho\approx 0.92$), first-order gradient-tracking methods
+		(EXTRA, DIGing, DGD+GT) stagnate or oscillate, while \textsc{DisGrem} converges
+		reliably due to its second-order steps effectively damping network-induced disagreement.
+		\item In 10-trial Monte-Carlo robustness tests, \textsc{DisGrem} achieves 100\% success
+		with a mean of only 30.6 iterations (CeDisGrem: 22.3 iterations);
+		EXTRA also succeeds but needs 162.6 iterations on average ($5$--$7\times$ more);
+		and DIGing/DGD+GT fail in $\ge80\%$ of trials.
+		\item \textsc{CeDisGrem}'s Hessian compression reduces communication by 30--50\% with
+		negligible iteration overhead, becoming increasingly advantageous as dimension $d$ grows.
+		\item Parameter sensitivity: all DisGrem variants converge for all tested scaling factors
+		$M_\mathrm{fac}\in[0.05, 3.0]\times L_{\max}$, confirming the theory's prediction that
+		$M$ acts as a pure amplifier rather than a sensitive stepsize.
+	\end{itemize}
+	
+	\noindent\textbf{Limitations and future work.}
+	Several directions merit further investigation:
+	\begin{itemize}[leftmargin=1.2em,itemsep=2pt]
+		\item \textbf{Heterogeneity dependence and accuracy floors.}
+		The constants scale with the gradient heterogeneity $\sigma_g$ and curvature heterogeneity $\sigma_H$.
+		When $\sigma_g>0$, an unavoidable stationarity floor appears (cf.\ \eqref{eq:eps_floor}).
+		Designing heterogeneity-aware regularization or variance-reduction mechanisms to reduce these constants is an important direction.
+		\item \textbf{Stochastic and mini-batch extensions.}
+		The current analysis assumes exact local gradients and Hessians.
+		Extending to stochastic approximations (e.g.\ via variance reduction) is important
+		for large-scale machine learning applications.
+		\item \textbf{Time-varying and directed graphs.}
+		The mixing matrix $W$ is assumed symmetric and time-invariant.
+		Handling directed graphs or dropping links would require a more delicate consensus
+		analysis and may affect the $\cO(\varepsilon^{-1}\log(\varepsilon^{-1}))$ bound.
+		\item \textbf{Lower bounds.}
+		It is an open question whether $\cO(\varepsilon^{-1})$ iterations and
+		$\cO(\varepsilon^{-1}\log(\varepsilon^{-1}))$ communication rounds are optimal for
+		decentralized second-order methods under the stated assumptions.
+	\end{itemize}
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\bibliographystyle{plainnat}
+	\begin{thebibliography}{99}
+		
+		\bibitem[Cartis et~al.(2011)Cartis, Gould, and Toint]{cartis2011arc}
+		C.~Cartis, N.~I.~M. Gould, and Ph.~L. Toint.
+		\newblock Adaptive cubic regularisation methods for unconstrained optimization. Part~I: motivation, convergence and numerical results.
+		\newblock \emph{Mathematical Programming}, 127:245--295, 2011.
+		
+		\bibitem[Eisen et~al.(2017)Eisen, Mokhtari, and Ribeiro]{eisen2017dqn}
+		M.~Eisen, A.~Mokhtari, and A.~Ribeiro.
+		\newblock Decentralized quasi-{N}ewton methods.
+		\newblock \emph{IEEE Transactions on Signal Processing}, 65(10):2613--2628, 2017.
+		
+		\bibitem[Jakoveti{\'c} et~al.(2014)Jakoveti{\'c}, Xavier, and Moura]{jakovetic2014fast}
+		D.~Jakoveti{\'c}, J.~Xavier, and J.~M.~F. Moura.
+		\newblock Fast distributed gradient methods.
+		\newblock \emph{IEEE Transactions on Automatic Control}, 59(5):1131--1146, 2014.
+		
+		\bibitem[Mishchenko(2023)]{mishchenko2023rn}
+		K.~Mishchenko.
+		\newblock Regularized {N}ewton method with global convergence and complexity bounds.
+		\newblock \emph{arXiv preprint arXiv:2112.02089v3}, 2023.
+		
+		\bibitem[Mokhtari et~al.(2015)Mokhtari, Ling, and Ribeiro]{mokhtari2015networknewton_arxiv}
+		A.~Mokhtari, Q.~Ling, and A.~Ribeiro.
+		\newblock Network {N}ewton---part {I}: algorithm and convergence.
+		\newblock \emph{arXiv preprint arXiv:1504.06017}, 2015.
+		
+		\bibitem[Mokhtari et~al.(2020)Mokhtari, Koppel, and Ribeiro]{mokhtari2020newtontracking}
+		A.~Mokhtari, A.~Koppel, and A.~Ribeiro.
+		\newblock Newton tracking: a decentralized method for exact convex optimization.
+		\newblock \emph{IEEE Transactions on Signal Processing}, 68:572--587, 2020.
+		
+		\bibitem[Nedi{\'c} and Ozdaglar(2009)]{nedic2009subgradient}
+		A.~Nedi{\'c} and A.~Ozdaglar.
+		\newblock Distributed subgradient methods for multi-agent optimization.
+		\newblock \emph{IEEE Transactions on Automatic Control}, 54(1):48--61, 2009.
+		
+		\bibitem[Nedi{\'c} et~al.(2017)Nedi{\'c}, Olshevsky, and Shi]{nedic2017diging}
+		A.~Nedi{\'c}, A.~Olshevsky, and W.~Shi.
+		\newblock Achieving geometric convergence for distributed optimization over time-varying graphs.
+		\newblock \emph{SIAM Journal on Optimization}, 27(4):2597--2633, 2017.
+		
+		\bibitem[Nesterov and Polyak(2006)]{nesterov2006cubic}
+		Y.~Nesterov and B.~T. Polyak.
+		\newblock Cubic regularization of {N}ewton method and its global performance.
+		\newblock \emph{Mathematical Programming}, 108:177--205, 2006.
+		
+		\bibitem[Shi et~al.(2015)Shi, Ling, Wu, and Yin]{shi2015extra}
+		W.~Shi, Q.~Ling, G.~Wu, and W.~Yin.
+		\newblock {EXTRA}: an exact first-order algorithm for decentralized consensus optimization.
+		\newblock \emph{SIAM Journal on Optimization}, 25(2):944--966, 2015.
+		
+		\bibitem[Yuan et~al.(2019)Yuan, Ying, and Sayed]{yuan2019exactdiffusion}
+		K.~Yuan, B.~Ying, and A.~H. Sayed.
+		\newblock Exact diffusion for distributed optimization and learning---Part {I}: algorithm development.
+		\newblock \emph{IEEE Transactions on Signal Processing}, 67(3):708--723, 2019.
+		
+	\end{thebibliography}
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	
+	\appendix
+	\section{Dispersion Recursions, Burn-in Enforcement, and Logarithmic Mixing}\label{app:dispersion}
+	
+	This appendix provides a complete enforcement argument for the explicit logarithmic schedule~\eqref{eq:log_schedule}.
+	The goal is to bound the network-induced error terms appearing in
+	Proposition~\ref{prop:inexact-rn}, Lemma~\ref{lem:lambda-comparable},
+	by quantities that decay faster than the target stationarity level $\varepsilon$.
+	Throughout this appendix we fix $p>2$ and set
+	\[
+	\tau_k=t_k=\left\lceil\frac{p\log(k+2)}{-\log\rho}\right\rceil,\qquad k\ge 0,
+	\]
+	so that
+	\begin{equation}\label{eq:rho_poly}
+		\rho^{\tau_k}\le (k+2)^{-p},\qquad \rho^{t_k}\le (k+2)^{-p},\qquad k\ge 0.
+	\end{equation}
+	
+	\subsection{Auxiliary inequalities}
+	
+	\begin{lemma}[Mean minimizes squared deviations]\label{lem:mean_minimizer_app}
+		Let $\{u_i\}_{i=1}^N\subset\R^m$ and define $\bar u:=\frac1N\sum_{i=1}^N u_i$.
+		Then for any $v\in\R^m$,
+		\[
+		\frac1N\sum_{i=1}^N\norm{u_i-\bar u}^2\le \frac1N\sum_{i=1}^N\norm{u_i-v}^2.
+		\]
+	\end{lemma}
+	\begin{proof}
+		Expand the right-hand side:
+		\begin{align*}
+			\sum_{i=1}^N\norm{u_i-v}^2
+			&=\sum_{i=1}^N\norm{(u_i-\bar u)+(\bar u-v)}^2\\
+			&=\sum_{i=1}^N\Big(\norm{u_i-\bar u}^2+2\ip{u_i-\bar u}{\bar u-v}+\norm{\bar u-v}^2\Big)\\
+			&=\sum_{i=1}^N\norm{u_i-\bar u}^2+2\ip{\sum_{i=1}^N(u_i-\bar u)}{\bar u-v}+N\norm{\bar u-v}^2.
+		\end{align*}
+		Since $\sum_{i=1}^N(u_i-\bar u)=0$, the cross term vanishes and we obtain
+		\[
+		\sum_{i=1}^N\norm{u_i-v}^2=\sum_{i=1}^N\norm{u_i-\bar u}^2+N\norm{\bar u-v}^2\ge \sum_{i=1}^N\norm{u_i-\bar u}^2.
+		\]
+		Divide by $N$.
+	\end{proof}
+	
+	\begin{lemma}[Uniform bound on local steps]\label{lem:step_bound_app}
+		Under Assumption~\ref{ass:standing}, define the (finite) constant
+		\[
+		G_g:=\sup_{k\ge 0}\ \max_{1\le i\le N}\ \norm{\tilde g_{i,k}}\ \in(0,\infty).
+		\]
+		(For numerical stability, $G_g$ can be enforced in practice by clipping $\tilde g_{i,k}$; it is used here only to simplify the dispersion recursion.)
+		Then for every $k\ge 0$ and every $i$, the local step of Algorithm~\ref{alg:disgrem} satisfies
+		\begin{equation}\label{eq:step_unif_app}
+			\norm{s_{i,k}}\le \sqrt{\frac{\norm{\tilde g_{i,k}}}{M}}\le \sqrt{\frac{G_g}{M}}.
+		\end{equation}
+		Consequently, $\norm{S_k}\le \sqrt{NG_g/M}$ for all $k$.
+	\end{lemma}
+	\begin{proof}
+		Fix $k$ and $i$. The local step satisfies
+		\[
+		(\tilde H_{i,k}+(\lambda_{i,k}+\hat e_{i,k})I)s_{i,k}=-\tilde g_{i,k},
+		\qquad \lambda_{i,k}=\sqrt{M\norm{\tilde g_{i,k}}},\qquad \hat e_{i,k}\ge 0.
+		\]
+		By construction $\tilde H_{i,k}\succeq 0$ and hence
+		$\tilde H_{i,k}+(\lambda_{i,k}+\hat e_{i,k})I\succeq (\lambda_{i,k}+\hat e_{i,k})I$.
+		Therefore
+		\[
+		(\lambda_{i,k}+\hat e_{i,k})\norm{s_{i,k}}
+		\le \norm{(\tilde H_{i,k}+(\lambda_{i,k}+\hat e_{i,k})I)s_{i,k}}=\norm{\tilde g_{i,k}}.
+		\]
+		Dropping $\hat e_{i,k}\ge 0$ yields $\lambda_{i,k}\norm{s_{i,k}}\le \norm{\tilde g_{i,k}}$.
+		If $\tilde g_{i,k}=0$ then $s_{i,k}=0$ and the bound holds. Otherwise, divide by $\lambda_{i,k}>0$:
+		\[
+		\norm{s_{i,k}}\le \frac{\norm{\tilde g_{i,k}}}{\lambda_{i,k}}=\frac{\norm{\tilde g_{i,k}}}{\sqrt{M\norm{\tilde g_{i,k}}}}=\sqrt{\frac{\norm{\tilde g_{i,k}}}{M}}.
+		\]
+		The final inequality follows from the definition of $G_g$.
+		Summing \eqref{eq:step_unif_app} over $i$ gives $\norm{S_k}^2=\sum_i\norm{s_{i,k}}^2\le N(G_g/M)$.
+	\end{proof}
+	
+	\subsection{Dispersion measures and basic contractions}
+	
+	For a stacked vector $Z=[z_1;\dots;z_N]\in\R^{Nd}$, define its RMS dispersion
+	\[
+	D(Z):=\sqrt{\frac1N\sum_{i=1}^N\norm{z_i-\bar z}^2}=\frac{1}{\sqrt N}\norm{((\Pmat)\otimes I_d)Z}.
+	\]
+	Similarly, for stacked matrices $\mathcal H=[H_1;\dots;H_N]\in\R^{Nd^2}$ with Frobenius norm on each block,
+	\[
+	D_H(\mathcal H):=\sqrt{\frac1N\sum_{i=1}^N\normF{H_i-\bar H}^2}.
+	\]
+	
+	\begin{lemma}[Contraction by mixing]\label{lem:mix_contract_app}
+		Let $W$ satisfy Assumption~\ref{ass:standing}(3). Then for any stacked vector $Z\in\R^{Nd}$ and integer $t\ge 1$,
+		\[
+		D\big((W^t\otimes I_d)Z\big)\le \rho^t\,D(Z).
+		\]
+		Likewise, for any stacked matrices $\mathcal H\in\R^{Nd^2}$,
+		\[
+		D_H\big((W^t\otimes I_{d^2})\mathcal H\big)\le \rho^t\,D_H(\mathcal H).
+		\]
+	\end{lemma}
+	\begin{proof}
+		We prove the vector statement; the matrix statement is identical with $I_d$ replaced by $I_{d^2}$.
+		Let $Z^\perp:=((\Pmat)\otimes I_d)Z$. Since $W$ is doubly stochastic, $\J W^t=\J$ and $W^t\J=\J$, hence
+		$(\Pmat W^t)=(W^t-\J)$ and
+		\[
+		((\Pmat)\otimes I_d)(W^t\otimes I_d)Z=((W^t-\J)\otimes I_d)Z.
+		\]
+		\[
+		\text{Note that }(W^t-\J)\J=0\text{ and }(W^t-\J)=(W^t-\J)\Pmat,  
+		\]
+		\[
+		\text{ hence }((W^t-\J)\otimes I_d)Z=((W^t-\J)\otimes I_d)Z^\perp.
+		\]
+		By Lemma~\ref{lem:consensus}, $\norm{((W^t-\J)\otimes I_d)Z^\perp}\le \rho^t\norm{Z^\perp}$.
+		Applying this to $Z^\perp$ and using $D(Z)=\norm{Z^\perp}/\sqrt N$ gives the claim.
+	\end{proof}
+	
+	\subsection{Primal dispersion recursion and decay}
+	
+	Recall the stacked post-mixing update $X_{k+1}=(W^{t_k}\otimes I_d)(\tilde X_k+S_k)$ and the pre-mixing $\tilde X_{k+1}=(W^{\tau_{k+1}}\otimes I_d)X_{k+1}$.
+	
+	\begin{lemma}[Primal dispersion recursion]\label{lem:DX_rec_strict}
+		For all $k\ge 0$,
+		\begin{equation}\label{eq:DX_rec_strict}
+			D(\tilde X_{k+1})\le \rho^{\tau_{k+1}}\rho^{t_k}\Big(D(\tilde X_k)+\frac{\norm{S_k}}{\sqrt N}\Big).
+		\end{equation}
+	\end{lemma}
+	\begin{proof}
+		First apply Lemma~\ref{lem:mix_contract_app} to the post-mixing step:
+		\[
+		D(X_{k+1})=D\big((W^{t_k}\otimes I_d)(\tilde X_k+S_k)\big)
+		\le \rho^{t_k} D(\tilde X_k+S_k).
+		\]
+		By the triangle inequality and the definition of $D(\cdot)$,
+		\[
+		D(\tilde X_k+S_k)=\sqrt{\frac1N\sum_i\norm{(\tilde x_{i,k}-\bar x_k)+(s_{i,k}-\bar s_k)}^2}
+		\le D(\tilde X_k)+\sqrt{\frac1N\sum_i\norm{s_{i,k}-\bar s_k}^2}.
+		\]
+		Since $\sum_i\norm{s_{i,k}-\bar s_k}^2\le \sum_i\norm{s_{i,k}}^2=\norm{S_k}^2$, we obtain
+		$D(\tilde X_k+S_k)\le D(\tilde X_k)+\norm{S_k}/\sqrt N$.
+		Thus
+		\[
+		D(X_{k+1})\le \rho^{t_k}\Big(D(\tilde X_k)+\frac{\norm{S_k}}{\sqrt N}\Big).
+		\]
+		Second apply Lemma~\ref{lem:mix_contract_app} to the pre-mixing step:
+		\[
+		D(\tilde X_{k+1})=D\big((W^{\tau_{k+1}}\otimes I_d)X_{k+1}\big)\le \rho^{\tau_{k+1}} D(X_{k+1}),
+		\]
+		and combine.
+	\end{proof}
+	
+	\begin{lemma}[Post-mixing primal dispersion]\label{lem:DX_post}
+		For all $k\ge 0$,
+		\[
+		D(X_{k+1})\le \rho^{t_k}\Big(D(\tilde X_k)+\frac{\|S_k\|}{\sqrt N}\Big).
+		\]
+	\end{lemma}
+	\begin{proof}
+		This is exactly the first inequality derived in the proof of Lemma~\ref{lem:DX_rec_strict}.
+	\end{proof}
+	
+	\begin{lemma}[Post-mixing primal dispersion decay]\label{lem:DX_post_decay}
+		There exists a constant $C_X^{+}>0$ such that for all $k\ge 0$,
+		\[
+		D(X_k)\le \frac{C_X^{+}}{(k+1)^{p}}.
+		\]
+	\end{lemma}
+	\begin{proof}
+		From Lemma~\ref{lem:DX_post}, $\rho^{t_k}\le (k+2)^{-p}$ under \eqref{eq:log_schedule}, and the uniform bounds
+		$D(\tilde X_k)\le D_{\max}$ (as in Lemma~\ref{lem:DX_decay_strict}) and $\|S_k\|/\sqrt N\le B$ (Lemma~\ref{lem:step_bound_app}),
+		we get $D(X_{k+1})\le (k+2)^{-p}(D_{\max}+B)$. Set $C_X^{+}:=D_{\max}+B$.
+	\end{proof}
+	
+	\begin{lemma}[Primal dispersion decay]\label{lem:DX_decay_strict}
+		There exists a constant $C_X>0$ such that for all $k\ge 0$,
+		\begin{equation}\label{eq:DX_decay_strict}
+			D(\tilde X_k)\le \frac{C_X}{(k+2)^{p-1}}.
+		\end{equation}
+	\end{lemma}
+\begin{proof}
+	Let $D_k:=D(\tilde X_k)$ and $B:=\sup_k\|S_k\|/\sqrt N\le \sqrt{G_g/M}$ from Lemma~\ref{lem:step_bound_app}.
+	From Lemma~\ref{lem:DX_rec_strict} we have
+	\[
+	D_{k+1}\le a_k(D_k+B),\qquad a_k:=\rho^{\tau_{k+1}}\rho^{t_k}.
+	\]
+	Under the schedule \eqref{eq:log_schedule}, $t_k\ge \left\lceil \frac{p\log 2}{-\log\rho}\right\rceil$ for all $k$,
+	hence $\rho^{t_k}\le 2^{-p}$. Therefore $a_k\le \rho^{t_k}\le q:=2^{-p}<1$ and
+	\[
+	D_{k+1}\le q D_k+qB.
+	\]
+	This implies the uniform bound $D_k\le q^kD_0+\frac{q}{1-q}B\le D_{\max}$ where
+	$D_{\max}:=D_0+\frac{q}{1-q}B$.
+	Returning to $a_k\le (k+2)^{-p}$ from \eqref{eq:rho_poly}, we obtain
+	\[
+	D_{k+1}\le (k+2)^{-p}(D_{\max}+B)\le \frac{D_{\max}+B}{(k+2)^{p-1}}.
+	\]
+	Setting $C_X:=D_{\max}+B$ yields \eqref{eq:DX_decay_strict}.
+\end{proof}
+	
+	
+	\subsection{Gradient-tracker dispersion recursion and decay}
+	
+	We derive a recursion for the pre-mixed gradient-tracker dispersion $D(\tilde G_k)$.
+	
+	\begin{lemma}[Pointwise gradient disagreement bound]\label{lem:grad_disagree_pointwise_app}
+		Let $Z=[z_1;\dots;z_N]\in\R^{Nd}$ and $\bar z:=\frac1N\sum_{i=1}^N z_i$.
+		Then
+		\begin{equation}\label{eq:grad_disagree_pointwise_app}
+			\frac{1}{\sqrt N}\norm{((\Pmat)\otimes I_d)\,\nabla F(Z)}
+			\le L_1\,D(Z)+\frac{\sigma_g}{\sqrt N}.
+		\end{equation}
+	\end{lemma}
+	\begin{proof}
+		Add and subtract $\nabla F(\one\otimes\bar z)$ and use the triangle inequality:
+		\[
+		((\Pmat)\otimes I_d)\nabla F(Z)=((\Pmat)\otimes I_d)\big(\nabla F(Z)-\nabla F(\one\otimes\bar z)\big)+((\Pmat)\otimes I_d)\nabla F(\one\otimes\bar z).
+		\]
+		For the second term, by definition of $\sigma_g$ in \eqref{eq:sigma_g_def},
+		\[
+		\norm{((\Pmat)\otimes I_d)\nabla F(\one\otimes\bar z)}\le \sigma_g.
+		\]
+		For the first term, use $\norm{((\Pmat)\otimes I_d)u}\le \norm{u}$ and $L_1$-Lipschitzness:
+		\[
+		\norm{\nabla F(Z)-\nabla F(\one\otimes\bar z)}^2
+		=\sum_{i=1}^N\norm{\nabla f_i(z_i)-\nabla f_i(\bar z)}^2
+		\le \sum_{i=1}^N (L_1\norm{z_i-\bar z})^2
+		=L_1^2\norm{Z^\perp}^2,
+		\]
+		where $Z^\perp:=((\Pmat)\otimes I_d)Z$.
+		Taking square roots and dividing by $\sqrt N$ yields \eqref{eq:grad_disagree_pointwise_app}.
+	\end{proof}
+	
+	\begin{lemma}[Gradient-tracker dispersion recursion]\label{lem:DG_rec_strict}
+		For all $k\ge 0$,
+		\begin{equation}\label{eq:DG_rec_strict}
+D(\tilde G_{k+1})
+\le \rho^{\tau_{k+1}}\rho^{t_k}\Big(D(\tilde G_k)+L_1 D(X_{k+1})+L_1 D(X_k)+\frac{2\sigma_g}{\sqrt N}\Big).
+		\end{equation}
+	\end{lemma}
+	\begin{proof}
+		Write the stacked update for the gradient tracker (Algorithm~\ref{alg:disgrem}):
+		\[
+G_{k+1}=(W^{t_k}\otimes I_d)\Big(\tilde G_k+\nabla F(X_{k+1})-\nabla F(X_k)\Big),
+\qquad
+\tilde G_{k+1}=(W^{\tau_{k+1}}\otimes I_d)G_{k+1}.
+		\]
+		Apply Lemma~\ref{lem:mix_contract_app} to the pre-mixing: $D(\tilde G_{k+1})\le \rho^{\tau_{k+1}}D(G_{k+1})$.
+		For $D(G_{k+1})$, apply $(\Pmat\otimes I_d)$, use $(\Pmat W^{t_k})=(W^{t_k}-\J)$, and take norms to get
+		\[
+D(G_{k+1})\le \rho^{t_k}\Big(D(\tilde G_k)+\frac{1}{\sqrt N}\norm{((\Pmat)\otimes I_d)(\nabla F(X_{k+1})-\nabla F(X_k))}\Big).
+		\]
+		Bound the forcing term by the triangle inequality and Lemma~\ref{lem:grad_disagree_pointwise_app} applied to $Z=X_{k+1}$ and $Z=X_k$.
+		Substitute back to obtain \eqref{eq:DG_rec_strict}.
+	\end{proof}
+	
+	\begin{lemma}[Gradient-tracker dispersion decay]\label{lem:DG_decay_strict}
+		There exists a constant $C_G>0$ such that for all $k\ge 0$,
+		\begin{equation}\label{eq:DG_decay_strict}
+			D(\tilde G_k)\le \frac{C_G}{(k+2)^{p-1}}.
+		\end{equation}
+	\end{lemma}
+\begin{proof}
+	Let $G_k:=D(\tilde G_k)$. From Lemma~\ref{lem:DG_rec_strict} and \eqref{eq:rho_poly},
+	\[
+	G_{k+1}\le a_k\big(G_k+B_G\big),\qquad a_k:=\rho^{\tau_{k+1}}\rho^{t_k}\le q:=2^{-p}<1,
+	\]
+	where under \eqref{eq:bounded_levelset} we may take $B_G:=4L_1D+2\sigma_g/\sqrt N$.
+	Thus $G_{k+1}\le qG_k+qB_G$, implying $G_k\le G_{\max}$ with
+	$G_{\max}:=G_0+\frac{q}{1-q}B_G$.
+	Using again $a_k\le (k+2)^{-p}$ yields
+	\[
+	G_{k+1}\le (k+2)^{-p}(G_{\max}+B_G)\le \frac{G_{\max}+B_G}{(k+2)^{p-1}}.
+	\]
+	Set $C_G:=G_{\max}+B_G$.
+\end{proof}
+	
+	\subsection{Hessian-tracker dispersion recursion and decay}
+	
+	We now control the pre-mixed Hessian-tracker dispersion $D_H(\tilde H_k)$.
+	
+	\begin{lemma}[Pointwise Hessian disagreement bound]\label{lem:hess_disagree_pointwise_app}
+		Let $Z=[z_1;\dots;z_N]\in\R^{Nd}$ and $\bar z:=\frac1N\sum_{i=1}^N z_i$.
+		Then
+		\begin{equation}\label{eq:hess_disagree_pointwise_app}
+			\frac{1}{\sqrt N}\normF{((\Pmat)\otimes I_{d^2})\,\nabla^2 F(Z)}
+			\le \sqrt d\,L_2\,D(Z)+\sigma_H.
+		\end{equation}
+	\end{lemma}
+	\begin{proof}
+		Add and subtract $\nabla^2 F(\one\otimes\bar z)$ and apply the triangle inequality:
+		\[
+		\normF{((\Pmat)\otimes I_{d^2})\,\nabla^2 F(Z)}
+		\le \normF{((\Pmat)\otimes I_{d^2})\big(\nabla^2 F(Z)-\nabla^2 F(\one\otimes\bar z)\big)}
+		+\normF{((\Pmat)\otimes I_{d^2})\,\nabla^2 F(\one\otimes\bar z)}.
+		\]
+		The second term is bounded by $\sqrt N\,\sigma_H$ by the definition \eqref{eq:sigma_H_def} (since $\norm{\bar z-x_\star}\le D$ whenever each $z_i$ satisfies \eqref{eq:bounded_levelset}).
+		For the first term, use $\normF{A}\le \sqrt d\,\normtwo{A}$ and $L_2$-Lipschitzness of $\nabla^2 f_i$:
+		\[
+		\normF{\nabla^2 F(Z)-\nabla^2 F(\one\otimes\bar z)}^2
+		=\sum_{i=1}^N\normF{\nabla^2 f_i(z_i)-\nabla^2 f_i(\bar z)}^2
+		\le \sum_{i=1}^N\big(\sqrt d\,L_2\norm{z_i-\bar z}\big)^2
+		=dL_2^2\norm{Z^\perp}^2,
+		\]
+		where $Z^\perp:=((\Pmat)\otimes I_d)Z$. Divide by $\sqrt N$ and use $\norm{Z^\perp}=\sqrt N\,D(Z)$.
+	\end{proof}
+	
+	\begin{lemma}[Hessian-tracker dispersion recursion]\label{lem:DH_rec_strict}
+		For all $k\ge 0$,
+		\begin{equation}\label{eq:DH_rec_strict}
+D_H(\tilde H_{k+1})
+\le \rho^{\tau_{k+1}}\rho^{t_k}\Big(D_H(\tilde H_k)+\sqrt d\,L_2 D(X_{k+1})+\sqrt d\,L_2 D(X_k)+2\sigma_H\Big).
+		\end{equation}
+	\end{lemma}
+	\begin{proof}
+		Use the stacked Hessian tracker update, the pre-mixing contraction, and the non-expansiveness of PSD projection (Lemma~\ref{lem:psd-dispersion}) as in Lemma~\ref{lem:DG_rec_strict}.
+		The forcing term is bounded by applying Lemma~\ref{lem:hess_disagree_pointwise_app} to $Z=X_{k+1}$ and $Z=X_k$.
+	\end{proof}
+	
+	\begin{lemma}[Hessian-tracker dispersion decay]\label{lem:DH_decay_strict}
+		There exists a constant $C_H>0$ such that for all $k\ge 0$,
+		\begin{equation}\label{eq:DH_decay_strict}
+			D_H(\tilde H_k)\le \frac{C_H}{(k+2)^{p-1}}.
+		\end{equation}
+	\end{lemma}
+\begin{proof}
+	Let $H_k:=D_H(\tilde H_k)$. From Lemma~\ref{lem:DH_rec_strict} and \eqref{eq:rho_poly},
+	\[
+	H_{k+1}\le a_k\big(H_k+B_H\big),\qquad a_k:=\rho^{\tau_{k+1}}\rho^{t_k}\le q:=2^{-p}<1,
+	\]
+	where using \eqref{eq:bounded_levelset} we may take $B_H:=4\sqrt d\,L_2D+2\sigma_H$.
+	Thus $H_{k+1}\le qH_k+qB_H$, implying $H_k\le H_{\max}$ with
+	$H_{\max}:=H_0+\frac{q}{1-q}B_H$.
+	Using again $a_k\le (k+2)^{-p}$ yields
+	\[
+	H_{k+1}\le (k+2)^{-p}(H_{\max}+B_H)\le \frac{H_{\max}+B_H}{(k+2)^{p-1}}.
+	\]
+	Set $C_H:=H_{\max}+B_H$.
+\end{proof}
+	\begin{proof}[Proof of Proposition~\ref{prop:dispersion_decay}]
+		Combine Lemmas~\ref{lem:DX_decay_strict}, \ref{lem:DG_decay_strict}, and \ref{lem:DH_decay_strict}.
+		The final statement follows from Cauchy--Schwarz together with $\Delta_k^g\le D(\tilde G_k)$ and $\Delta_k^H\le D_H(\tilde H_k)$.
+	\end{proof}
+	
+	\subsection{Burn-in index for enforcing relative conditions}
+	
+\begin{lemma}[A concrete burn-in index (hard-constant version)]\label{lem:burnin_index}
+	Let $C_X,C_G,C_H$ be the constants in Lemmas~\ref{lem:DX_decay_strict}, \ref{lem:DG_decay_strict}, and \ref{lem:DH_decay_strict},
+	and let $C_X^{+}$ be the constant in Lemma~\ref{lem:DX_post_decay}.
+	Fix $\varepsilon>0$ and set $\eta:=1/12$ and $\alpha_b=\alpha_d:=1/4$.
+	
+	Define the hard lower-bound proxy
+	\[
+	\lambda_\varepsilon := \sqrt{\frac{3M\varepsilon}{5}},
+	\qquad
+	A_\varepsilon := M_H + \Big(1+\frac{\eta}{8}\Big)\lambda_\varepsilon
+	= M_H + \frac{97}{96}\lambda_\varepsilon.
+	\]
+	Define two hard tolerances
+	\[
+	T_1(\varepsilon)
+	:= \frac{\varepsilon\,\lambda_\varepsilon}{240\,(M_H+\lambda_\varepsilon)\,A_\varepsilon},
+	\qquad
+	T_2(\varepsilon)
+	:= \frac{\varepsilon\,\lambda_\varepsilon}{240\,A_\varepsilon}.
+	\]
+	
+	Define the thresholds
+	\[
+	\delta_X(\varepsilon)
+	:= \min\Big\{\frac{\varepsilon}{64L_1},\ \frac{\eta}{16}\sqrt{\frac{3}{5}}\cdot\frac{\sqrt{M\varepsilon}}{L_2},\ \frac{T_2(\varepsilon)}{8L_1}\Big\},
+	\qquad
+\delta_X^{+}(\varepsilon)
+:= \min\Big\{\frac{\varepsilon}{64L_1},\ \frac{T_2(\varepsilon)}{4L_1}\Big\},
+\qquad
+\delta_G(\varepsilon)
+:= \min\Big\{
+\frac{T_2(\varepsilon)}{4},\
+\frac{3M\,\varepsilon^2}{8400\,(M_H+\lambda_\varepsilon)\,A_\varepsilon},\
+\frac{\varepsilon}{64\sqrt N}
+\Big\},
+	\qquad
+	\delta_H(\varepsilon)
+	:= \frac{M\,T_1(\varepsilon)}{4}.
+	\]
+	
+	Define the burn-in index
+	\begin{equation}\label{eq:K0_def}
+		K_0(\varepsilon)
+		:=\min\Big\{k\ge 0:\ 
+		\frac{C_X}{(k+2)^{p-1}}\le \delta_X(\varepsilon),\ 
+		\frac{C_X^{+}}{(k+1)^{p}}\le \delta_X^{+}(\varepsilon),\ 
+		\frac{C_G}{(k+2)^{p-1}}\le \delta_G(\varepsilon),\ 
+		\frac{C_H}{(k+2)^{p-1}}\le \delta_H(\varepsilon)
+		\Big\}.
+	\end{equation}
+	Then for all $k\ge K_0(\varepsilon)$,
+	\[
+	D(\tilde X_k)\le \delta_X(\varepsilon),\qquad
+	D(X_k)\le \delta_X^{+}(\varepsilon),\qquad
+	D(\tilde G_k)\le \delta_G(\varepsilon),\qquad
+	D_H(\tilde H_k)\le \delta_H(\varepsilon).
+	\]
+\end{lemma}
+	\begin{proof}
+		Immediate from the decay bounds and the definition of $K_0(\varepsilon)$.
+	\end{proof}
+	\noindent\textbf{How this is used.}
+	On any iteration $k$ with $\norm{\nabla f(\bar x_k)}\ge \varepsilon$,
+	the two components of $\delta_X(\varepsilon)$ ensure simultaneously:
+	(i) the \emph{gradient-bridge} forcing terms are $O(\varepsilon)$, and
+	(ii) the \emph{Hessian-bridge} forcing term is $O(\sqrt{\varepsilon})$, matching the scale of $\lambda_k\asymp\sqrt{M\|g_k\|}$.
+	This resolves the $\varepsilon$ vs.\ $\sqrt{\varepsilon}$ mismatch that would otherwise break Proposition~\ref{prop:inexact-rn}(3).
+	
+	\begin{proof}[Proof of Proposition~\ref{prop:burnin_enforce}]
+		Fix $p>2$ and use the logarithmic schedule~\eqref{eq:log_schedule}.
+		Set $\eta:=1/12$ and $\alpha_b=\alpha_d=1/4$.
+		Let $\varepsilon\ge \varepsilon_{\mathrm{floor}}$ and let $K_0(\varepsilon)$ be as in Lemma~\ref{lem:burnin_index}.
+		Fix any $k\ge K_0(\varepsilon)$ such that $\norm{\nabla f(\bar x_k)}\ge \varepsilon$.
+		
+		\medskip
+		\noindent\textbf{1) Relative bridge.}
+		By Lemma~\ref{lem:bridge-grad} and Lemma~\ref{lem:tildeDelta-upper},
+		\[
+		\norm{g_k-\tilde{\bar g}_k}
+		\le D(\tilde G_k)+2L_1D(\tilde X_k)+L_1D(X_k)+\frac{\sigma_g}{\sqrt N}.
+		\]
+		Since $k\ge K_0(\varepsilon)$, Lemma~\ref{lem:burnin_index} yields $D(\tilde G_k)\le \varepsilon/(64\sqrt N)$ and $D(\tilde X_k)\le \varepsilon/(64L_1)$. Moreover, Lemma~\ref{lem:burnin_index} also gives
+		\[
+		D(X_k)\le \delta_X^{+}(\varepsilon)\le \frac{\varepsilon}{64L_1}.
+		\]
+		Also $\varepsilon\ge 16\sigma_g/\sqrt N$ gives $\sigma_g/\sqrt N\le \varepsilon/16$.
+		
+		Therefore,
+		\[
+		\norm{g_k-\tilde{\bar g}_k}
+		\le \frac{\varepsilon}{64\sqrt N}+\frac{\varepsilon}{32}+\frac{\varepsilon}{64}+\frac{\varepsilon}{16}
+		\le \frac{\varepsilon}{8},
+		\]
+		and hence $\norm{\tilde{\bar g}_k}\ge 7\varepsilon/8$. Thus \eqref{eq:rel-bridge} holds with $\alpha_b=1/4$.
+		
+		\medskip
+		\noindent\textbf{2) Relative dispersion.}
+		Using $\max_i\norm{\tilde g_{i,k}-\tilde{\bar g}_k}\le \sqrt N D(\tilde G_k)$ and $D(\tilde G_k)\le \varepsilon/(64\sqrt N)$ gives
+		$\max_i\norm{\tilde g_{i,k}-\tilde{\bar g}_k}\le \varepsilon/64\le (1/56)\norm{\tilde{\bar g}_k}$.
+		Hence \eqref{eq:rel-disp} holds with $\alpha_d=1/4$.
+		
+		\medskip
+		\noindent\textbf{3) Hessian absorption and bridge accuracy.}
+		Let $\bar\lambda_k:=\frac1N\sum_i\sqrt{M\norm{\tilde g_{i,k}}}$.
+		By \eqref{eq:rel-disp}, $\norm{\tilde g_{i,k}}\ge (1-\alpha_d)\norm{\tilde{\bar g}_k}$ for all $i$, so
+		$\bar\lambda_k\ge \sqrt{M(1-\alpha_d)\norm{\tilde{\bar g}_k}}$.
+		Using \eqref{eq:rel-bridge} yields $\norm{\tilde{\bar g}_k}\ge \norm{g_k}/(1+\alpha_b)$ and thus
+		\[
+		\bar\lambda_k\ge \sqrt{\frac{3}{5}}\sqrt{M\norm{g_k}}\ge \sqrt{\frac{3}{5}}\sqrt{M\varepsilon}.
+		\]
+		Since $\varepsilon\ge 61440\,\bar e_{\max}^2/M$, we have $\bar\lambda_k\ge 192\,\bar e_{\max}\ge 192\,\bar e_k$.
+		Let $\alpha:=\eta/16=1/192$. Then $191\,\bar e_k\le \bar\lambda_k$ implies $(1-\alpha)\bar e_k\le \alpha\bar\lambda_k$, which is equivalent to
+		\[
+		\bar e_k\le \alpha(\bar\lambda_k+\bar e_k)=\frac{\eta}{16}\lambda_k
+		\quad\Longrightarrow\quad
+		\bar e_k\le \frac{\eta}{8}\lambda_k,
+		\]
+		i.e., \eqref{eq:e-absorb} holds (in fact with a stronger constant).
+		
+		Finally, Lemma~\ref{lem:bridge-hess} gives
+		$\normtwo{\nabla^2 f(\bar x_k)-\tilde{\bar H}_k}\le L_2D(\tilde X_k)+\bar e_k$.
+		By Lemma~\ref{lem:burnin_index}, $D(\tilde X_k)\le \frac{\eta}{16}\sqrt{\frac{3}{5}}\cdot\frac{\sqrt{M\varepsilon}}{L_2}$, hence
+		\[
+		L_2D(\tilde X_k)\le \frac{\eta}{16}\sqrt{\frac{3}{5}}\sqrt{M\varepsilon}\le \frac{\eta}{16}\bar\lambda_k\le \frac{\eta}{16}\lambda_k.
+		\]
+		Combining with $\bar e_k\le (\eta/16)\lambda_k$ yields
+		$L_2D(\tilde X_k)+\bar e_k\le (\eta/8)\lambda_k$, i.e., Proposition~\ref{prop:inexact-rn}(3).
+		
+		\medskip
+	\medskip
+\medskip
+\noindent\textbf{4) Remaining inexact RN conditions (items (1) and (2) of Proposition~\ref{prop:inexact-rn}).}
+Fix $k\ge K_0(\varepsilon)$ such that $\|\nabla f(\bar x_k)\|\ge \varepsilon$.
+We prove items (1) and (2) of Proposition~\ref{prop:inexact-rn} with $\eta=1/12$ and $\alpha_b=\alpha_d=1/4$.
+
+\smallskip
+\noindent\underline{\emph{Step 4.1: hard lower bounds on $\underline\lambda_k$ and on the reference-system size.}}
+By items (1)--(2) proved earlier in this proposition, the relative bridge and dispersion conditions
+\eqref{eq:rel-bridge}--\eqref{eq:rel-disp} hold with $\alpha_b=\alpha_d=1/4$.
+Hence
+\[
+\|\tilde{\bar g}_k\|\ge \frac{1}{1+\alpha_b}\|g_k\|\ge \frac{4}{5}\varepsilon,
+\qquad
+\min_i\|\tilde g_{i,k}\|\ge (1-\alpha_d)\|\tilde{\bar g}_k\|\ge \frac{3}{5}\varepsilon.
+\]
+Therefore, for every $i$,
+\[
+\lambda_{i,k}=\sqrt{M\|\tilde g_{i,k}\|}\ge \sqrt{\frac{3M\varepsilon}{5}}=\lambda_\varepsilon,
+\qquad
+\tilde\lambda_{i,k}=\lambda_{i,k}+\hat e_{i,k}\ge \lambda_{i,k}\ge \lambda_\varepsilon,
+\]
+and thus
+\begin{equation}\label{eq:hard_lambda_lb_step4}
+	\underline\lambda_k:=\min_i\tilde\lambda_{i,k}\ge \lambda_\varepsilon,
+	\qquad
+	\lambda_k:=\tilde{\bar\lambda}_k=\frac1N\sum_i\tilde\lambda_{i,k}\ge \lambda_\varepsilon.
+\end{equation}
+
+Moreover, by Proposition~\ref{prop:inexact-rn}(3) already established in Step~3,
+\[
+\|\nabla^2 f(\bar x_k)-\tilde{\bar H}_k\|\le \frac{\eta}{8}\lambda_k.
+\]
+Since $\|\nabla^2 f(\bar x_k)\|\le M_H$, we obtain
+\[
+\|\tilde{\bar H}_k\|\le M_H+\frac{\eta}{8}\lambda_k,
+\qquad
+\|A_k^{\mathrm{ref}}\|
+=\|\tilde{\bar H}_k+\lambda_k I\|
+\le \|\tilde{\bar H}_k\|+\lambda_k
+\le M_H+\Big(1+\frac{\eta}{8}\Big)\lambda_k.
+\]
+Hence, using $\lambda_k\ge \lambda_\varepsilon$ and $\|\tilde{\bar g}_k\|\ge \frac45\varepsilon$,
+\begin{equation}\label{eq:sref_hard_lb_step4}
+	\|s_k^{\mathrm{ref}}\|
+	=\|(A_k^{\mathrm{ref}})^{-1}\tilde{\bar g}_k\|
+	\ge \frac{\|\tilde{\bar g}_k\|}{\|A_k^{\mathrm{ref}}\|}
+	\ge \frac{\frac45\varepsilon}{M_H+\big(1+\frac{\eta}{8}\big)\lambda_k}
+	\ge \frac{\frac45\varepsilon}{M_H+\big(1+\frac{\eta}{8}\big)\lambda_\varepsilon}
+	=\frac{\frac45\varepsilon}{A_\varepsilon}.
+\end{equation}
+
+\smallskip
+\noindent\underline{\emph{Step 4.2: item (1) (dispersion control).}}
+By Lemma~\ref{lem:step-disp},
+\[
+\|\bar s_k-s_k^{\mathrm{ref}}\|
+\le
+\frac{1}{\underline\lambda_k}\Delta_k^g
++\frac{\|\tilde{\bar g}_k\|}{\underline\lambda_k\,\lambda_k}\big(\Delta_k^H+\Delta_k^\lambda\big).
+\]
+Using $\lambda_k\ge \underline\lambda_k$ and $\underline\lambda_k^2\ge M(1-\alpha_d)\|\tilde{\bar g}_k\|$ (from $\tilde\lambda_{i,k}\ge \lambda_{i,k}$ and \eqref{eq:rel-disp}),
+we get the hard bound
+\[
+\frac{\|\tilde{\bar g}_k\|}{\underline\lambda_k\,\lambda_k}
+\le
+\frac{\|\tilde{\bar g}_k\|}{\underline\lambda_k^2}
+\le \frac{1}{M(1-\alpha_d)}=\frac{4}{3M}.
+\]
+Moreover, Lemma~\ref{lem:delta_lambda_control} with $\alpha_d=1/4$ gives
+\[
+\Delta_k^\lambda
+\le
+\frac{\sqrt{M}}{\sqrt{1-\alpha_d}}\cdot\frac{\Delta_k^g}{\sqrt{\|\tilde{\bar g}_k\|}}
++2\bar e_k
+\le
+\sqrt{\frac{5M}{3}}\cdot\frac{\Delta_k^g}{\sqrt{\varepsilon}}+2\bar e_k,
+\]
+where we used $\|\tilde{\bar g}_k\|\ge \frac45\varepsilon$.
+Combining the above and using $\underline\lambda_k\ge \lambda_\varepsilon$ yields
+\begin{align*}
+	\|\bar s_k-s_k^{\mathrm{ref}}\|
+	&\le
+	\frac{1}{\lambda_\varepsilon}\Delta_k^g
+	+\frac{4}{3M}\Delta_k^H
+	+\frac{4}{3M}\Delta_k^\lambda\\
+	&\le
+	\Big(\frac{1}{\lambda_\varepsilon}+\frac{4}{3M}\sqrt{\frac{5M}{3}}\cdot\frac{1}{\sqrt{\varepsilon}}\Big)\Delta_k^g
+	+\frac{4}{3M}\Delta_k^H
+	+\frac{8}{3M}\bar e_k\\
+	&=
+	\frac{7}{3}\sqrt{\frac{5}{3}}\cdot\frac{\Delta_k^g}{\sqrt{M\varepsilon}}
+	+\frac{4}{3M}\Delta_k^H
+	+\frac{8}{3M}\bar e_k.
+\end{align*}
+By Cauchy--Schwarz, $\Delta_k^g\le D(\tilde G_k)$ and $\Delta_k^H\le D_H(\tilde H_k)$.
+By Lemma~\ref{lem:burnin_index}, for $k\ge K_0(\varepsilon)$ we have
+$D(\tilde G_k)\le \delta_G(\varepsilon)$ and $D_H(\tilde H_k)\le \delta_H(\varepsilon)$.
+By the definitions of $\delta_G(\varepsilon)$ and $\delta_H(\varepsilon)$ in Lemma~\ref{lem:burnin_index}, and by $\bar e_k\le \bar e_{\max}$
+together with $\varepsilon\ge \varepsilon_{\mathrm{floor}}$ from \eqref{eq:eps_floor},
+the three terms above are each bounded by $T_1(\varepsilon)/3$.
+Therefore,
+\begin{equation}\label{eq:hard_step_disp_T1}
+	\|\bar s_k-s_k^{\mathrm{ref}}\|\le T_1(\varepsilon).
+\end{equation}
+Using \eqref{eq:sref_hard_lb_step4} and $\lambda_k\ge \lambda_\varepsilon$,
+\[
+T_1(\varepsilon)
+=\frac{\varepsilon\lambda_\varepsilon}{240(M_H+\lambda_\varepsilon)A_\varepsilon}
+\le
+\frac{\eta}{16}\cdot\frac{\lambda_k}{M_H+\lambda_k}\cdot \|s_k^{\mathrm{ref}}\|.
+\]
+Hence $\|\bar s_k-s_k^{\mathrm{ref}}\|\le \frac{\eta}{16}\frac{\lambda_k}{M_H+\lambda_k}\|s_k^{\mathrm{ref}}\|$.
+Since $\frac{\eta}{16}<1/2$, we have $\|\bar s_k\|\ge (1-\eta/16)\|s_k^{\mathrm{ref}}\|$ and therefore
+\[
+\|\bar s_k-s_k^{\mathrm{ref}}\|
+\le
+\frac{\eta}{16}\frac{\lambda_k}{M_H+\lambda_k}\cdot\frac{1}{1-\eta/16}\|\bar s_k\|
+\le
+\frac{\eta}{8}\cdot\frac{\lambda_k}{M_H+\lambda_k}\,\|\bar s_k\|,
+\]
+which is exactly item (1) of Proposition~\ref{prop:inexact-rn}.
+
+\smallskip
+\noindent\underline{\emph{Step 4.3: item (2) (gradient-bridge accuracy).}}
+By Lemma~\ref{lem:tildeDelta-upper} and $\sqrt{\tilde E_k}=D(\tilde X_k)$,
+\[
+\frac{\|\tilde\Delta_k\|}{\sqrt N}+L_1\sqrt{\tilde E_k}
+\le
+D(\tilde G_k)+2L_1 D(\tilde X_k)+L_1 D(X_k)+\frac{\sigma_g}{\sqrt N}.
+\]
+By Lemma~\ref{lem:burnin_index}, for $k\ge K_0(\varepsilon)$ we have
+\[
+D(\tilde G_k)\le \delta_G(\varepsilon),\quad
+D(\tilde X_k)\le \delta_X(\varepsilon),\quad
+D(X_k)\le \delta_X^{+}(\varepsilon).
+\]
+By the definitions of $\delta_G(\varepsilon),\delta_X(\varepsilon),\delta_X^{+}(\varepsilon)$
+and the condition $\varepsilon\ge \varepsilon_{\mathrm{floor}}$ in \eqref{eq:eps_floor},
+each of the four terms above is bounded by $T_2(\varepsilon)/4$, hence
+\begin{equation}\label{eq:hard_bridge_T2}
+	\frac{\|\tilde\Delta_k\|}{\sqrt N}+L_1\sqrt{\tilde E_k}\le T_2(\varepsilon).
+\end{equation}
+Finally, \eqref{eq:hard_step_disp_T1} implies $\|\bar s_k\|\ge (1-\eta/16)\|s_k^{\mathrm{ref}}\|$,
+so using $\lambda_k\ge \lambda_\varepsilon$ and \eqref{eq:sref_hard_lb_step4} we get
+\[
+\frac{\eta}{8}\lambda_k\|\bar s_k\|
+\ge
+\frac{\eta}{8}(1-\eta/16)\lambda_\varepsilon\|s_k^{\mathrm{ref}}\|
+\ge
+\frac{\eta}{8}(1-\eta/16)\lambda_\varepsilon\cdot \frac{\frac45\varepsilon}{A_\varepsilon}
+\ge
+\frac{\eta}{16}\lambda_\varepsilon\cdot \frac{\frac45\varepsilon}{A_\varepsilon}
+=
+T_2(\varepsilon),
+\]
+where we used $(1-\eta/16)\ge 1/2$.
+Combining with \eqref{eq:hard_bridge_T2} yields
+\[
+\frac{\|\tilde\Delta_k\|}{\sqrt N}+L_1\sqrt{\tilde E_k}\le \frac{\eta}{8}\lambda_k\|\bar s_k\|,
+\]
+which is exactly item (2) of Proposition~\ref{prop:inexact-rn}.
+This completes Step~4.
+	\end{proof}
+	
+	
+	\section{Proofs}\label{app:proofs}
+	
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:taylor3}]
+		Fix $x,s$ and define $\phi(t):=h(x+ts)$ for $t\in[0,1]$.
+		Then $\phi'(t)=\ip{\nabla h(x+ts)}{s}$ and $\phi''(t)=s^\top\nabla^2 h(x+ts)s$.
+		By $L_2$-Lipschitzness of $\nabla^2 h$,
+		\[
+		|\phi''(t)-\phi''(0)|
+		=|s^\top(\nabla^2 h(x+ts)-\nabla^2 h(x))s|
+		\le \normtwo{\nabla^2 h(x+ts)-\nabla^2 h(x)}\,\norm{s}^2
+		\le L_2 t\norm{s}^3.
+		\]
+		Hence $\phi''(t)\le \phi''(0)+L_2 t\norm{s}^3$. Integrate:
+		\[
+		\phi(1)=\phi(0)+\phi'(0)+\int_0^1 (1-t)\phi''(t)\,dt
+		\le \phi(0)+\phi'(0)+\int_0^1(1-t)\big(\phi''(0)+L_2 t\norm{s}^3\big)\,dt.
+		\]
+		Compute $\int_0^1(1-t)\,dt=\frac12$ and $\int_0^1(1-t)t\,dt=\frac16$, giving
+		\[
+		\phi(1)\le \phi(0)+\phi'(0)+\tfrac12\phi''(0)+\tfrac{L_2}{6}\norm{s}^3.
+		\]
+		Substitute $\phi(0)=h(x)$, $\phi'(0)=\ip{\nabla h(x)}{s}$, $\phi''(0)=s^\top\nabla^2 h(x)s$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:consensus}]
+		Since $W$ is symmetric, it is orthogonally diagonalizable and its eigenvalues lie in $[-1,1]$.
+		Because $W$ is doubly stochastic, $\one$ is an eigenvector with eigenvalue $1$, and $\J$ is the orthogonal projector onto $\mathrm{span}\{\one\}$.
+		Moreover $W\J=\J W=\J$.
+		We prove $W^t-\J=(W-\J)^t$ by induction.
+		For $t=1$ it is trivial.
+		Assume $(W-\J)^t=W^t-\J$. Then
+		\[
+		(W-\J)^{t+1}=(W-\J)^t(W-\J)=(W^t-\J)(W-\J)=W^{t+1}-W^t\J-\J W+\J^2.
+		\]
+		Using $W^t\J=\J$, $\J W=\J$, and $\J^2=\J$, we obtain $(W-\J)^{t+1}=W^{t+1}-\J$.
+		Taking spectral norms:
+		\[
+		\normtwo{W^t-\J}=\normtwo{(W-\J)^t}\le \normtwo{W-\J}^t=\rho^t.
+		\]
+		For stacked vectors, $\normtwo{(A\otimes I_d)}=\normtwo{A}$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:gap-grad}]
+		By $L$-smoothness, for any $y$,
+		\[
+		h(y)\le h(x)+\ip{\nabla h(x)}{y-x}+\frac{L}{2}\norm{y-x}^2.
+		\]
+		Choose $y=x-\frac{1}{L}\nabla h(x)$:
+		\[
+		h\Big(x-\frac{1}{L}\nabla h(x)\Big)\le h(x)-\frac{1}{2L}\norm{\nabla h(x)}^2.
+		\]
+		Since $x_\star$ minimizes $h$, $h(x_\star)\le h(x-\frac{1}{L}\nabla h(x))$.
+		Rearrange to get $\norm{\nabla h(x)}^2\le 2L(h(x)-h(x_\star))$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:frob}]
+		Let $\lambda_1,\dots,\lambda_d$ be eigenvalues of symmetric $E$.
+		Then $\normtwo{E}=\max_j|\lambda_j|$ and $\normF{E}=\sqrt{\sum_j\lambda_j^2}$, hence $\normtwo{E}\le\normF{E}=\hat e$.
+		Eigenvalues of $\hat e I\pm E$ are $\hat e\pm \lambda_j\ge \hat e-|\lambda_j|\ge 0$, so $\hat e I\pm E\succeq 0$.
+		Thus $s^\top(\hat e I+E)s\ge 0$, i.e., $-\hat e\norm{s}^2-s^\top E s\le 0$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:M-vs-s}]
+		From the local linear system,
+		\[
+		(\tilde H_{i,k}+(\lambda_{i,k}+\hat e_{i,k})I)s_{i,k}=-\tilde g_{i,k}.
+		\]
+		Since $\tilde H_{i,k}\succeq 0$ and $\hat e_{i,k}\ge 0$, we have
+		\[
+		(\lambda_{i,k}+\hat e_{i,k})\norm{s_{i,k}} \le \norm{(\tilde H_{i,k}+(\lambda_{i,k}+\hat e_{i,k})I)s_{i,k}}
+		= \norm{\tilde g_{i,k}},
+		\]
+		hence $\lambda_{i,k}\norm{s_{i,k}}\le \norm{\tilde g_{i,k}}$.
+		Using $\lambda_{i,k}^2=M\norm{\tilde g_{i,k}}$, we get
+		\[
+		\lambda_{i,k}\norm{s_{i,k}}\le \frac{\lambda_{i,k}^2}{M}
+		\quad\Longrightarrow\quad
+		M\norm{s_{i,k}}\le \lambda_{i,k}.
+		\]
+		Since $M\ge L_2$, also $L_2\norm{s_{i,k}}\le \lambda_{i,k}$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:local-descent}]
+		Apply Lemma~\ref{lem:taylor3} to $h=f_i$ at $(\tilde x_{i,k},s_{i,k})$:
+		\[
+		f_i(\tilde x_{i,k}+s_{i,k})
+		\le f_i(\tilde x_{i,k})+\ip{\nabla f_i(\tilde x_{i,k})}{s_{i,k}}
+		+\frac12 s_{i,k}^\top\nabla^2 f_i(\tilde x_{i,k})s_{i,k}+\frac{L_2}{6}\norm{s_{i,k}}^3.
+		\]
+		Write $\nabla f_i(\tilde x_{i,k})=\tilde g_{i,k}-\tilde\delta_{i,k}$.
+		Also from the step equation,
+		\[
+		\ip{\tilde g_{i,k}}{s_{i,k}}
+		=-s_{i,k}^\top\tilde H_{i,k}s_{i,k}-(\lambda_{i,k}+\hat e_{i,k})\norm{s_{i,k}}^2.
+		\]
+		Substitute into the Taylor bound:
+		\begin{align*}
+			f_i(\tilde x_{i,k}+s_{i,k})
+			&\le f_i(\tilde x_{i,k})
+			+\ip{\tilde g_{i,k}}{s_{i,k}}-\ip{\tilde\delta_{i,k}}{s_{i,k}}
+			+\frac12 s_{i,k}^\top\nabla^2 f_i(\tilde x_{i,k})s_{i,k}+\frac{L_2}{6}\norm{s_{i,k}}^3\\
+			&= f_i(\tilde x_{i,k})
+			-\ip{\tilde\delta_{i,k}}{s_{i,k}}
+			-s_{i,k}^\top\tilde H_{i,k}s_{i,k}-(\lambda_{i,k}+\hat e_{i,k})\norm{s_{i,k}}^2
+			+\frac12 s_{i,k}^\top\nabla^2 f_i(\tilde x_{i,k})s_{i,k}
+			+\frac{L_2}{6}\norm{s_{i,k}}^3.
+		\end{align*}
+		Write $\tilde H_{i,k}=\nabla^2 f_i(\tilde x_{i,k})+\tilde e_{i,k}$:
+		\[
+		-s^\top\tilde H s + \frac12 s^\top\nabla^2 f_i s
+		= -\frac12 s^\top\nabla^2 f_i s - s^\top \tilde e\, s \le - s^\top \tilde e\,s,
+		\]
+		since $\nabla^2 f_i\succeq 0$.
+		By Lemma~\ref{lem:frob}, $-\hat e_{i,k}\norm{s}^2 - s^\top\tilde e\,s\le 0$, hence
+		$- s^\top \tilde e\,s - \hat e_{i,k}\norm{s}^2 \le 0$.
+		Dropping this nonpositive quantity yields
+		\[
+		f_i(\tilde x_{i,k}+s_{i,k})
+		\le f_i(\tilde x_{i,k})
+		-\lambda_{i,k}\norm{s_{i,k}}^2
+		-\ip{\tilde\delta_{i,k}}{s_{i,k}}
+		+\frac{L_2}{6}\norm{s_{i,k}}^3.
+		\]
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:local-clean}]
+		From Lemma~\ref{lem:M-vs-s}, $L_2\norm{s_{i,k}}\le \lambda_{i,k}$, hence
+		$\frac{L_2}{6}\norm{s_{i,k}}^3\le \frac{1}{6}\lambda_{i,k}\norm{s_{i,k}}^2$.
+		Insert into \eqref{eq:local-descent} to obtain
+		\[
+		f_i(\tilde x_{i,k}+s_{i,k})
+		\le f_i(\tilde x_{i,k})-\Big(1-\frac16\Big)\lambda_{i,k}\norm{s_{i,k}}^2-\ip{\tilde\delta_{i,k}}{s_{i,k}}.
+		\]
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:avg-pres}]
+		Pre-mixing preserves averages since $W^{\tau_k}$ is doubly stochastic:
+		\[
+		\tilde{\bar x}_k=\frac1N\sum_i\tilde x_{i,k}
+		=\frac1N\sum_i\sum_j [W^{\tau_k}]_{ij}x_{j,k}
+		=\frac1N\sum_j \Big(\sum_i [W^{\tau_k}]_{ij}\Big)x_{j,k}
+		=\frac1N\sum_j x_{j,k}=\bar x_k.
+		\]
+		Similarly, post-mixing is doubly stochastic and $y_{i,k+1}=\tilde x_{i,k}+s_{i,k}$, so
+		\[
+		\bar x_{k+1}=\frac1N\sum_i x_{i,k+1}
+		=\frac1N\sum_i\sum_j[W^{t_k}]_{ij}y_{j,k+1}
+		=\frac1N\sum_j y_{j,k+1}
+		=\tilde{\bar x}_k+\bar s_k=\bar x_k+\bar s_k.
+		\]
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:avg-regime}]
+		By Lemma~\ref{lem:M-vs-s}, $M\norm{s_{i,k}}\le \lambda_{i,k}$ for all $i$, hence
+		\[
+		\frac1N\sum_{i=1}^N \lambda_{i,k}\ge \frac{M}{N}\sum_{i=1}^N \norm{s_{i,k}}
+		\ge M \norm{\frac1N\sum_{i=1}^N s_{i,k}}
+		= M\norm{\bar s_k},
+		\]
+		using $\norm{\frac1N\sum_i s_i}\le \frac1N\sum_i\norm{s_i}$.
+		Since $M\ge L_2$, $L_2\norm{\bar s_k}\le M\norm{\bar s_k}\le \frac1N\sum_i\lambda_{i,k}$.
+		Finally, $\tilde{\bar\lambda}_k=\frac1N\sum_i(\lambda_{i,k}+\hat e_{i,k})\ge \frac1N\sum_i\lambda_{i,k}$.
+	\end{proof}
+	
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:tildeDelta-upper}]
+		Recall $\tilde\Delta_k=\tilde G_k-\nabla F(\tilde X_k)$ and $\bar x_k=\frac1N\sum_i \tilde x_{i,k}$.
+		Add and subtract $\one\otimes\tilde{\bar g}_k$ and $\nabla F(\one\otimes\bar x_k)$:
+		\[
+		\tilde\Delta_k
+		=\big(\tilde G_k-(\one\otimes\tilde{\bar g}_k)\big)
+		+\big((\one\otimes\tilde{\bar g}_k)-\nabla F(\one\otimes\bar x_k)\big)
+		+\big(\nabla F(\one\otimes\bar x_k)-\nabla F(\tilde X_k)\big).
+		\]
+		Divide by $\sqrt N$ and bound each term.
+		
+		\noindent\textbf{(i) Dispersion term.}
+		By definition,
+		$\frac{1}{\sqrt N}\|\tilde G_k-(\one\otimes\tilde{\bar g}_k)\|=D(\tilde G_k)$.
+		
+		\noindent\textbf{(ii) Heterogeneity + disagreement term.}
+		Using Lemma~\ref{lem:avg-track}, $\tilde{\bar g}_k=\frac1N\sum_{i=1}^N\nabla f_i(x_{i,k})$.
+		Hence
+		\[
+		\frac{1}{\sqrt N}\|(\one\otimes\tilde{\bar g}_k)-\nabla F(\one\otimes\bar x_k)\|
+		\le \|\tilde{\bar g}_k-\nabla f(\bar x_k)\|+\frac{1}{\sqrt N}\|((\Pmat)\otimes I_d)\nabla F(\one\otimes\bar x_k)\|.
+		\]
+		The second term is bounded by $\sigma_g/\sqrt N$ by \eqref{eq:sigma_g_def}.
+		For the first term,
+		\[
+		\|\tilde{\bar g}_k-\nabla f(\bar x_k)\|
+		=\Big\|\frac1N\sum_{i=1}^N\big(\nabla f_i(x_{i,k})-\nabla f_i(\bar x_k)\big)\Big\|
+		\le \frac1N\sum_{i=1}^N L_1\|x_{i,k}-\bar x_k\|
+		\le L_1 D_X(k).
+		\]
+		
+		\noindent\textbf{(iii) Lipschitz term.}
+		By block-wise $L_1$-Lipschitzness,
+		\[
+		\frac{1}{\sqrt N}\|\nabla F(\one\otimes\bar x_k)-\nabla F(\tilde X_k)\|
+		\le L_1\sqrt{\tilde E_k}.
+		\]
+		Combine (i)--(iii). Finally, $\Delta_k^g\le D(\tilde G_k)$ follows from Cauchy--Schwarz.
+	\end{proof}
+	
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:bridge-grad}]
+		Write
+		\[
+		\nabla f(\bar x_k)-\tilde{\bar g}_k
+		=\frac1N\sum_{i=1}^N\big(\nabla f_i(\bar x_k)-\tilde g_{i,k}\big)
+		=\frac1N\sum_{i=1}^N\big(\nabla f_i(\bar x_k)-\nabla f_i(\tilde x_{i,k})\big)
+		-\frac1N\sum_{i=1}^N \tilde\delta_{i,k}.
+		\]
+		Take norms and apply triangle inequality:
+		\[
+		\norm{\nabla f(\bar x_k)-\tilde{\bar g}_k}
+		\le \frac1N\sum_i\norm{\nabla f_i(\bar x_k)-\nabla f_i(\tilde x_{i,k})}
+		+\frac1N\sum_i\norm{\tilde\delta_{i,k}}.
+		\]
+		By $L_1$-Lipschitzness,
+		$\norm{\nabla f_i(\bar x_k)-\nabla f_i(\tilde x_{i,k})}\le L_1\norm{\bar x_k-\tilde x_{i,k}}$.
+		By Cauchy--Schwarz,
+		$\frac1N\sum_i\norm{\bar x_k-\tilde x_{i,k}}\le \sqrt{\frac1N\sum_i\norm{\bar x_k-\tilde x_{i,k}}^2}=\sqrt{\tilde E_k}$.
+		Also,
+		$\frac1N\sum_i\norm{\tilde\delta_{i,k}}\le \sqrt{\frac1N\sum_i\norm{\tilde\delta_{i,k}}^2}=\frac{\norm{\tilde\Delta_k}}{\sqrt N}$.
+		Combine.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:bridge-hess}]
+		Decompose
+		\[
+		\nabla^2 f(\bar x_k)-\tilde{\bar H}_k
+		=\frac1N\sum_{i=1}^N\big(\nabla^2 f_i(\bar x_k)-\nabla^2 f_i(\tilde x_{i,k})\big)
+		+\frac1N\sum_{i=1}^N\big(\nabla^2 f_i(\tilde x_{i,k})-\tilde H_{i,k}\big).
+		\]
+		Take operator norms and triangle inequality:
+		\[
+		\normtwo{\nabla^2 f(\bar x_k)-\tilde{\bar H}_k}
+		\le \frac1N\sum_i\normtwo{\nabla^2 f_i(\bar x_k)-\nabla^2 f_i(\tilde x_{i,k})}
+		+\frac1N\sum_i\normtwo{\nabla^2 f_i(\tilde x_{i,k})-\tilde H_{i,k}}.
+		\]
+		By $L_2$-Lipschitzness of Hessians,
+		$\normtwo{\nabla^2 f_i(\bar x_k)-\nabla^2 f_i(\tilde x_{i,k})}\le L_2\norm{\bar x_k-\tilde x_{i,k}}$,
+		and Cauchy--Schwarz gives the average bound $\le L_2\sqrt{\tilde E_k}$.
+		For the second term, $\normtwo{A}\le \normF{A}$ implies
+		$\normtwo{\nabla^2 f_i(\tilde x_{i,k})-\tilde H_{i,k}}\le \normF{\nabla^2 f_i(\tilde x_{i,k})-\tilde H_{i,k}}=\hat e_{i,k}$.
+		Averaging yields $\bar e_k$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Remark~\ref{rem:psd-nonexp}]
+		$\ProjPSD$ is the Euclidean projection onto a closed convex set in the Hilbert space $(\R^{d\times d},\ip{A}{B}=\mathrm{tr}(A^\top B))$,
+		so it is firmly non-expansive; in particular, it is $1$-Lipschitz in Frobenius norm.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:psd-dispersion}]
+		Let $T(A)=\ProjPSD(\mathrm{sym}(A))$. By Remark~\ref{rem:psd-nonexp}, $T$ is $1$-Lipschitz in Frobenius norm. Let $B_i=T(A_i)$ and $\bar B=\frac1N\sum_i B_i$. By Lemma~\ref{lem:mean_minimizer_app},
+		$\frac1N\sum_i\normF{B_i-\bar B}^2\le \frac1N\sum_i\normF{B_i-T(\bar A)}^2$ with $\bar A=\frac1N\sum_i A_i$. Then $\normF{B_i-T(\bar A)}\le \normF{A_i-\bar A}$, and the claim follows.
+	\end{proof}
+	
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:step-disp}]
+		Fix $k$ and abbreviate $A_i:=A_{i,k}$, $A:=A_k^{\mathrm{ref}}$, $\tilde g_i:=\tilde g_{i,k}$, $\tilde{\bar g}:=\tilde{\bar g}_k$.
+		Then $s_i=-A_i^{-1}\tilde g_i$ and $s^{\mathrm{ref}}=-A^{-1}\tilde{\bar g}$.
+		Decompose:
+		\[
+		s_i-s^{\mathrm{ref}}
+		=-A_i^{-1}(\tilde g_i-\tilde{\bar g}) + (A^{-1}-A_i^{-1})\tilde{\bar g}.
+		\]
+		Since $A_i=\tilde H_{i,k}+\tilde\lambda_{i,k}I\succeq \tilde\lambda_{i,k}I\succeq \underline\lambda_k I$,
+		$\normtwo{A_i^{-1}}\le 1/\underline\lambda_k$.
+		Thus
+		\[
+		\norm{s_i-s^{\mathrm{ref}}}
+		\le \frac{1}{\underline\lambda_k}\norm{\tilde g_i-\tilde{\bar g}} + \normtwo{A^{-1}-A_i^{-1}}\,\norm{\tilde{\bar g}}.
+		\]
+		Use the resolvent identity:
+		\[
+		A^{-1}-A_i^{-1}=A_i^{-1}(A_i-A)A^{-1}.
+		\]
+		Therefore
+		\[
+		\normtwo{A^{-1}-A_i^{-1}}
+		\le \normtwo{A_i^{-1}}\normtwo{A_i-A}\normtwo{A^{-1}}
+		\le \frac{1}{\underline\lambda_k}\cdot \frac{1}{\tilde{\bar\lambda}_k}\,\normtwo{A_i-A},
+		\]
+		since $A\succeq \tilde{\bar\lambda}_k I$ implies $\normtwo{A^{-1}}\le 1/\tilde{\bar\lambda}_k$.
+		Moreover
+		\[
+		A_i-A=(\tilde H_{i,k}-\tilde{\bar H}_k)+(\tilde\lambda_{i,k}-\tilde{\bar\lambda}_k)I,
+		\]
+		so $\normtwo{A_i-A}\le \normtwo{\tilde H_{i,k}-\tilde{\bar H}_k}+|\tilde\lambda_{i,k}-\tilde{\bar\lambda}_k|$.
+		Combine and average over $i$, using
+		$\norm{\bar s-s^{\mathrm{ref}}}\le \frac1N\sum_i \norm{s_i-s^{\mathrm{ref}}}$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Proposition~\ref{prop:inexact-rn}]
+		The cubic regime $L_2\norm{\bar s_k}\le \tilde{\bar\lambda}_k$ is Lemma~\ref{lem:avg-regime}.
+		For the residual, write
+		\[
+		r_k=(\nabla^2 f(\bar x_k)+\lambda_k I)\bar s_k+g_k,\qquad \lambda_k=\tilde{\bar\lambda}_k.
+		\]
+		Add and subtract $s_k^{\mathrm{ref}}$:
+		\[
+		r_k=(\nabla^2 f(\bar x_k)+\lambda_k I)(\bar s_k-s_k^{\mathrm{ref}})
+		+(\nabla^2 f(\bar x_k)+\lambda_k I)s_k^{\mathrm{ref}}+g_k.
+		\]
+		Using $(\tilde{\bar H}_k+\lambda_k I)s_k^{\mathrm{ref}}=-\tilde{\bar g}_k$, we have
+		\[
+		(\nabla^2 f(\bar x_k)+\lambda_k I)s_k^{\mathrm{ref}}+g_k
+		=(\nabla^2 f(\bar x_k)-\tilde{\bar H}_k)s_k^{\mathrm{ref}}+(g_k-\tilde{\bar g}_k).
+		\]
+		Thus
+		\[
+		r_k=(\nabla^2 f(\bar x_k)+\lambda_k I)(\bar s_k-s_k^{\mathrm{ref}})
+		+(\nabla^2 f(\bar x_k)-\tilde{\bar H}_k)s_k^{\mathrm{ref}}+(g_k-\tilde{\bar g}_k).
+		\]
+		Take norms:
+		\begin{align*}
+			\norm{r_k}
+			&\le \normtwo{\nabla^2 f(\bar x_k)+\lambda_k I}\,\norm{\bar s_k-s_k^{\mathrm{ref}}}
+			+\normtwo{\nabla^2 f(\bar x_k)-\tilde{\bar H}_k}\,\norm{s_k^{\mathrm{ref}}}
+			+\norm{g_k-\tilde{\bar g}_k}.
+		\end{align*}
+		First, $\normtwo{\nabla^2 f(\bar x_k)+\lambda_k I}\le M_H+\lambda_k$ by Assumption~\ref{ass:standing}(5).
+		Using condition (1),
+		\[
+		\normtwo{\nabla^2 f(\bar x_k)+\lambda_k I}\,\norm{\bar s_k-s_k^{\mathrm{ref}}}
+		\le (M_H+\lambda_k)\cdot \frac{\eta}{8}\cdot\frac{\lambda_k}{M_H+\lambda_k}\norm{\bar s_k}
+		=\frac{\eta}{8}\lambda_k\norm{\bar s_k}.
+		\]
+		Second, by Lemma~\ref{lem:bridge-hess} and condition (3),
+		$\normtwo{\nabla^2 f(\bar x_k)-\tilde{\bar H}_k}\le \eta\lambda_k/8$.
+		Also
+		\[
+		\norm{s_k^{\mathrm{ref}}}\le \norm{\bar s_k}+\norm{\bar s_k-s_k^{\mathrm{ref}}}
+		\le \norm{\bar s_k}+\frac{\eta}{8}\norm{\bar s_k}
+		\le \frac98\norm{\bar s_k},
+		\]
+		since $\eta\le 1/12$ implies $1+\eta/8\le 9/8$.
+		Hence
+		\[
+		\normtwo{\nabla^2 f(\bar x_k)-\tilde{\bar H}_k}\,\norm{s_k^{\mathrm{ref}}}
+		\le \frac{\eta}{8}\lambda_k\cdot \frac98\norm{\bar s_k}=\frac{9\eta}{64}\lambda_k\norm{\bar s_k}.
+		\]
+		Third, by Lemma~\ref{lem:bridge-grad} and condition (2),
+		$\norm{g_k-\tilde{\bar g}_k}\le \eta\lambda_k\norm{\bar s_k}/8$.
+		Summing:
+		\[
+\norm{r_k}\le \left(\frac{\eta}{8}+\frac{9\eta}{64}+\frac{\eta}{8}\right)\lambda_k\norm{\bar s_k}
+=\frac{25\eta}{64}\lambda_k\norm{\bar s_k}\le \eta\lambda_k\norm{\bar s_k}.
+		\]
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:lambda-comparable}]
+		From \eqref{eq:rel-bridge}:
+		\[
+		\norm{g_k}\ge \norm{\tilde{\bar g}_k}-\norm{g_k-\tilde{\bar g}_k}\ge (1-\alpha_b)\norm{\tilde{\bar g}_k},
+		\quad
+		\norm{g_k}\le \norm{\tilde{\bar g}_k}+\norm{g_k-\tilde{\bar g}_k}\le (1+\alpha_b)\norm{\tilde{\bar g}_k}.
+		\]
+		Thus
+		\[
+		\frac{1}{1+\alpha_b}\norm{g_k}\le \norm{\tilde{\bar g}_k}\le \frac{1}{1-\alpha_b}\norm{g_k}.
+		\]
+		From \eqref{eq:rel-disp}, for all $i$,
+		\[
+		(1-\alpha_d)\norm{\tilde{\bar g}_k}\le \norm{\tilde g_{i,k}}\le (1+\alpha_d)\norm{\tilde{\bar g}_k}.
+		\]
+		Taking square roots and multiplying by $\sqrt{M}$:
+		\[
+		\sqrt{1-\alpha_d}\sqrt{M\norm{\tilde{\bar g}_k}}\le \lambda_{i,k}=\sqrt{M\norm{\tilde g_{i,k}}}
+		\le \sqrt{1+\alpha_d}\sqrt{M\norm{\tilde{\bar g}_k}}.
+		\]
+		Averaging gives the same bounds for $\bar\lambda_k:=\frac1N\sum_i\lambda_{i,k}$.
+		Since $\lambda_k=\bar\lambda_k+\bar e_k\ge \bar\lambda_k$,
+		\[
+		\lambda_k\ge \sqrt{1-\alpha_d}\sqrt{M\norm{\tilde{\bar g}_k}}
+		\ge \frac{\sqrt{1-\alpha_d}}{\sqrt{1+\alpha_b}}\sqrt{M\norm{g_k}}.
+		\]
+		For the upper bound, \eqref{eq:e-absorb} implies
+		$\lambda_k=\bar\lambda_k+\bar e_k\le \bar\lambda_k+\frac{\eta}{8}\lambda_k$,
+		hence $(1-\eta/8)\lambda_k\le \bar\lambda_k$ and thus
+		\[
+		\lambda_k\le \frac{1}{1-\eta/8}\bar\lambda_k
+		\le \frac{1}{1-\eta/8}\sqrt{1+\alpha_d}\sqrt{M\norm{\tilde{\bar g}_k}}
+		\le \frac{1}{1-\eta/8}\cdot\frac{\sqrt{1+\alpha_d}}{\sqrt{1-\alpha_b}}\sqrt{M\norm{g_k}}.
+		\]
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:descent-inexact}]
+		Apply Lemma~\ref{lem:taylor3} to $f$ at $(\bar x_k,\bar s_k)$:
+		\[
+		f(\bar x_k+\bar s_k)\le f(\bar x_k)+\ip{g_k}{\bar s_k}+\frac12\bar s_k^\top\nabla^2 f(\bar x_k)\bar s_k+\frac{L_2}{6}\norm{\bar s_k}^3.
+		\]
+		Let $d_k:=(\nabla^2 f(\bar x_k)+\lambda_k I)\bar s_k+g_k$.
+		Then
+		\[
+		\ip{g_k}{\bar s_k}=-\bar s_k^\top\nabla^2 f(\bar x_k)\bar s_k-\lambda_k\norm{\bar s_k}^2+\ip{d_k}{\bar s_k}.
+		\]
+		Substitute:
+		\[
+		f(\bar x_{k+1})\le f(\bar x_k)-\frac12\bar s_k^\top\nabla^2 f(\bar x_k)\bar s_k-\lambda_k\norm{\bar s_k}^2+\ip{d_k}{\bar s_k}+\frac{L_2}{6}\norm{\bar s_k}^3.
+		\]
+		Since $\nabla^2 f(\bar x_k)\succeq 0$, drop the nonpositive term to get
+		\[
+		f(\bar x_{k+1})\le f(\bar x_k)-\lambda_k\norm{\bar s_k}^2+\ip{d_k}{\bar s_k}+\frac{L_2}{6}\norm{\bar s_k}^3.
+		\]
+		Bound $\ip{d_k}{\bar s_k}\le \norm{d_k}\norm{\bar s_k}\le \eta\lambda_k\norm{\bar s_k}^2$.
+		Also $L_2\norm{\bar s_k}\le \lambda_k$ gives $\frac{L_2}{6}\norm{\bar s_k}^3\le \frac{1}{6}\lambda_k\norm{\bar s_k}^2$.
+		Combine.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:grad-inexact}]
+		By the integral form of Taylor's theorem and Lipschitz Hessian,
+		\[
+		\nabla f(\bar x_k+\bar s_k)=g_k+\nabla^2 f(\bar x_k)\bar s_k+r_k,\qquad \norm{r_k}\le \frac{L_2}{2}\norm{\bar s_k}^2.
+		\]
+		Using $d_k=(\nabla^2 f(\bar x_k)+\lambda_k I)\bar s_k+g_k$ we have
+		$g_k+\nabla^2 f(\bar x_k)\bar s_k=-\lambda_k\bar s_k+d_k$.
+		Thus
+		\[
+		\norm{g_{k+1}}\le \lambda_k\norm{\bar s_k}+\norm{d_k}+\norm{r_k}
+		\le \lambda_k\norm{\bar s_k}+\eta\lambda_k\norm{\bar s_k}+\frac{L_2}{2}\norm{\bar s_k}^2.
+		\]
+		Finally $L_2\norm{\bar s_k}\le \lambda_k$ implies $\frac{L_2}{2}\norm{\bar s_k}^2\le \frac12\lambda_k\norm{\bar s_k}$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:steady-rec}]
+		Assume $\eta\le 1/12$. Then in Lemma~\ref{lem:descent-inexact},
+		$c_d:=1-\eta-\frac16\ge \frac34$.
+		Let $C_g:=1+\eta+\frac12\le 2$ (since $\eta\le 1/12$).
+		For $k\in\mathcal I$, Lemma~\ref{lem:grad-inexact} yields
+		\[
+		\norm{g_{k+1}}\le C_g\lambda_k\norm{\bar s_k}.
+		\]
+		Because $k\in\mathcal I$, $\norm{g_{k+1}}\ge \frac14\norm{g_k}$, hence
+		\[
+		\norm{\bar s_k}\ge \frac{\norm{g_k}}{4C_g\lambda_k}.
+		\]
+		By Lemma~\ref{lem:descent-inexact},
+		\[
+		\Phi_k-\Phi_{k+1}\ge c_d\,\lambda_k\norm{\bar s_k}^2
+		\ge c_d\,\lambda_k\left(\frac{\norm{g_k}}{4C_g\lambda_k}\right)^2
+		=\frac{c_d}{16C_g^2}\frac{\norm{g_k}^2}{\lambda_k}.
+		\]
+		By Lemma~\ref{lem:lambda-comparable}, $\lambda_k\le C_\lambda\sqrt{M\norm{g_k}}$,
+		thus
+		\[
+		\frac{\norm{g_k}^2}{\lambda_k}\ge \frac{1}{C_\lambda\sqrt{M}}\norm{g_k}^{3/2}.
+		\]
+		By convexity of $f$ and Assumption~\ref{ass:standing}(4),
+		\[
+		\Phi_k=f(\bar x_k)-f_\star \le \ip{g_k}{\bar x_k-x_\star}\le D\norm{g_k}
+		\quad\Rightarrow\quad
+		\norm{g_k}^{3/2}\ge D^{-3/2}\Phi_k^{3/2}.
+		\]
+		Combine to obtain $\Phi_k-\Phi_{k+1}\ge \tau \Phi_k^{3/2}$ with
+		\[
+		\tau:=\frac{c_d}{16C_g^2 C_\lambda D^{3/2}\sqrt{M}}.
+		\]
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:sharp-count}]
+		Each $k\in\mathcal S$ satisfies $\norm{g_{k+1}}<\frac14\norm{g_k}$.
+		After $m$ sharp steps, the gradient norm decreases by at least $4^{-m}$:
+		$\norm{g_{k}}\le 4^{-m}\norm{g_0}$.
+		To keep $\norm{g_k}>\varepsilon$ requires $4^{-m}\norm{g_0}>\varepsilon$, i.e., $m<\log_4(\norm{g_0}/\varepsilon)$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Lemma~\ref{lem:telescoping}]
+		If there exists an index $k$ such that $u_k=\tau\Phi_k^{1/2}\ge 1$, then
+		$\Phi_{k+1}\le \Phi_k-\tau\Phi_k^{3/2}=\Phi_k(1-u_k)\le 0$, hence $\Phi_{k+1}=0$
+		and the claim holds trivially for all subsequent indices. Therefore, we may
+		assume $u_k\in[0,1)$ for all $k$.
+		Assume $\Phi_k>0$ and set $\psi_k:=\Phi_k^{-1/2}$.
+		From $\Phi_{k+1}\le \Phi_k-\tau\Phi_k^{3/2}=\Phi_k(1-\tau\Phi_k^{1/2})$, define $u_k:=\tau\Phi_k^{1/2}\in[0,1)$ and get
+		\[
+		\psi_{k+1}=\Phi_{k+1}^{-1/2}\ge \Phi_k^{-1/2}(1-u_k)^{-1/2}=\psi_k(1-u_k)^{-1/2}.
+		\]
+		For $u\in[0,1)$, convexity of $(1-u)^{-1/2}$ implies $(1-u)^{-1/2}\ge 1+\frac{u}{2}$.
+		Thus $\psi_{k+1}\ge \psi_k(1+u_k/2)=\psi_k+\tau/2$.
+		Iterating: $\psi_k\ge \psi_0+\frac{\tau}{2}k\ge \frac{\tau}{2}(k+2)$, hence
+		$\Phi_k=\psi_k^{-2}\le \frac{4}{\tau^2(k+2)^2}$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Theorem~\ref{thm:main}]
+		We first show $\Phi_k=\cO(1/k^2)$.
+		Let $m_k:=|\mathcal S\cap\{0,\dots,k-1\}|$.
+		If $m_k\ge k/2$, then $\norm{g_k}\le 4^{-m_k}\norm{g_0}\le 4^{-k/2}\norm{g_0}$.
+		By convexity and Assumption~\ref{ass:standing}(4), $\Phi_k\le D\norm{g_k}\le D\norm{g_0}4^{-k/2}$, which is $\cO(1/k^2)$.
+		Otherwise $m_k<k/2$, so there are at least $k/2$ steady indices up to $k$.
+Let $k_1<k_2<\cdots<k_m$ be the indices in $\mathcal I\cap\{0,1,\dots,k-1\}$,
+so $m\ge k/2$. Define $\Psi_j:=\Phi_{k_j}$.
+By Lemma~\ref{lem:descent-inexact}, $\{\Phi_\ell\}$ is nonincreasing, hence
+$\Phi_{k_{j+1}}\le \Phi_{k_j+1}$ for all $j$.
+Since $k_j\in\mathcal I$, Lemma~\ref{lem:steady-rec} gives
+$\Phi_{k_j+1}\le \Phi_{k_j}-\tau\Phi_{k_j}^{3/2}=\Psi_j-\tau\Psi_j^{3/2}$.
+Therefore, $\Psi_{j+1}\le \Psi_j-\tau\Psi_j^{3/2}$ for all $j$.
+Applying Lemma~\ref{lem:telescoping} to $\{\Psi_j\}$ yields
+$\Psi_m\le \frac{4}{\tau^2(m+2)^2}\le \frac{16}{\tau^2(k+4)^2}$,
+and since $\Phi_k\le \Psi_m$, we obtain $\Phi_k=\cO(1/k^2)$.
+		Applying Lemma~\ref{lem:telescoping} to that recursion yields $\Phi_k\le C/(k+2)^2$ for a constant $C$.
+		Thus $\Phi_k=\cO(1/k^2)$ in all cases.
+		
+		Next, by Lemma~\ref{lem:gap-grad} with $h=f$ and $L=L_1$,
+		$\norm{g_k}^2\le 2L_1\Phi_k$, hence $\norm{g_k}=\cO(1/k)$.
+		Finally, $\norm{g_k}\le C/k\le \varepsilon$ holds when $k\ge C\varepsilon^{-1}$.
+	\end{proof}
+	
+	\begin{proof}[Proof of Theorem~\ref{thm:comm}]
+		Under \eqref{eq:log_schedule}, $\tau_k=t_k=\cO(\log(k+2))$. By Theorem~\ref{thm:end2end}, $K(\varepsilon)=\cO(\varepsilon^{-1})$. Hence
+		\[
+		\sum_{k=0}^{K(\varepsilon)-1}(\tau_k+t_k)\le C \sum_{k=0}^{K(\varepsilon)-1}\log(k+2)
+		\le C K(\varepsilon)\log(K(\varepsilon)+2)=\cO(\varepsilon^{-1}\log(\varepsilon^{-1})).
+		\]
+	\end{proof}
+	
+\end{document}

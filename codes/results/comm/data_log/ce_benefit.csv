@@ -1,0 +1,17 @@
+Function,Algorithm,tol=1e-03,tol=1e-04,tol=1e-05,tol=1e-06,tol=1e-07,tol=1e-08,tol=1e-09,tol=1e-10
+ridge,DisGrem,5.51,6.48,7.04,7.71,8.59,10.94,13.72,16.37
+ridge,CeDisGrem,5.24,6.16,6.69,7.23,8.87,11.42,13.88,16.20
+ridge,AdaDisGrem,3.24,3.60,3.90,5.10,7.85,10.73,13.38,16.17
+ridge,CeAdaDisGrem,2.98,3.32,3.71,6.07,8.59,11.04,13.66,16.10
+logsumexp,DisGrem,96.52,110.46,118.93,124.06,127.06,128.97,131.17,133.16
+logsumexp,CeDisGrem,92.01,105.17,112.89,117.77,120.72,122.72,124.85,126.97
+logsumexp,AdaDisGrem,10.42,12.25,13.44,15.62,17.45,19.28,21.11,23.30
+logsumexp,CeAdaDisGrem,9.64,11.49,23.76,35.60,NaN,NaN,NaN,NaN
+huber,DisGrem,30.97,36.60,40.82,43.64,45.75,47.16,49.27,51.38
+huber,CeDisGrem,21.33,40.64,43.85,48.42,48.85,NaN,NaN,NaN
+huber,AdaDisGrem,14.78,16.89,19.00,20.41,21.82,23.93,25.34,26.74
+huber,CeAdaDisGrem,25.89,39.19,41.95,46.54,NaN,NaN,NaN,NaN
+logreg_real,DisGrem,14.32,17.20,18.92,20.17,21.11,22.12,24.11,26.24
+logreg_real,CeDisGrem,13.40,16.10,17.77,19.05,21.70,23.40,24.94,25.87
+logreg_real,AdaDisGrem,4.79,5.51,6.25,7.83,9.77,11.60,13.73,15.56
+logreg_real,CeAdaDisGrem,4.80,6.24,19.12,19.51,34.44,34.94,36.07,37.54

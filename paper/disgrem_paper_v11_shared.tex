@@ -1,0 +1,205 @@
+% SIAM Shared Information for DisGrem paper (v11 SIAM format)
+% Packages, macros, and metadata shared between article and supplement.
+
+% ============================================================
+% Additional packages (not provided by siamart171218.cls)
+% ============================================================
+% siamart171218.cls already provides: amsmath (leqno), ntheorem,
+% hyperref, xcolor, graphicx, epstopdf, algorithm, cleveref, hypcap
+\usepackage{amsfonts,amssymb}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{algpseudocode}
+\usepackage[utf8]{inputenc}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{enumitem}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{multirow}
+\usepackage{subcaption}
+\usepackage[section]{placeins}
+
+% Float placement: keep figures/tables near their reference text
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.8}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{5}
+
+% Tighter spacing around floats and captions
+\setlength{\floatsep}{8pt plus 2pt minus 2pt}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\intextsep}{8pt plus 2pt minus 2pt}
+\setlength{\abovecaptionskip}{6pt}
+\setlength{\belowcaptionskip}{2pt}
+
+\ifpdf
+  \DeclareGraphicsExtensions{.pdf,.png,.jpg,.eps}
+\else
+  \DeclareGraphicsExtensions{.eps}
+\fi
+
+% ============================================================
+% Figure paths
+% ============================================================
+\graphicspath{
+	{figures/main/}
+	{figures/appendix/}
+}
+
+% Safe figure include: compile even if figure files are missing
+\makeatletter
+\newcommand{\safeincludegraphics}[2][]{%
+	\begingroup
+	\let\input@path\Ginput@path
+	\def\@foundfile{}%
+	\IfFileExists{#2}{\def\@foundfile{#2}}{%
+		\IfFileExists{#2.pdf}{\def\@foundfile{#2.pdf}}{%
+			\IfFileExists{#2.png}{\def\@foundfile{#2.png}}{%
+				\IfFileExists{#2.jpg}{\def\@foundfile{#2.jpg}}{%
+					\IfFileExists{#2.jpeg}{\def\@foundfile{#2.jpeg}}{%
+						\IfFileExists{#2.eps}{\def\@foundfile{#2.eps}}{}%
+					}%
+				}%
+			}%
+		}%
+	}%
+	\ifx\@foundfile\@empty
+	\fbox{\parbox[c][0.18\textheight][c]{0.9\linewidth}{\centering
+			Missing figure: \texttt{\detokenize{#2}}}}%
+	\else
+	\includegraphics[#1]{\@foundfile}%
+	\fi
+	\endgroup
+}
+\makeatother
+
+% ============================================================
+% Cleveref serial comma (Oxford comma)
+% ============================================================
+\newcommand{\creflastconjunction}{, and~}
+
+% ============================================================
+% Avoid hyperref PDF string warnings for math in bookmarks
+% ============================================================
+\pdfstringdefDisableCommands{%
+	\def\cO{O}%
+	\def\one{1}%
+	\def\J{J}%
+	\def\Pmat{P}%
+	\def\norm#1{||#1||}%
+	\def\ip#1#2{<#1,#2>}%
+}
+
+% ============================================================
+% Additional theorem-like environments (SIAM style)
+% ============================================================
+% theorem, lemma, corollary, proposition, definition are
+% already defined by siamart171218.cls
+\newsiamthm{assumption}{Assumption}
+\crefname{assumption}{Assumption}{Assumptions}
+\Crefname{assumption}{Assumption}{Assumptions}
+\newsiamremark{remark}{Remark}
+\crefname{remark}{Remark}{Remarks}
+\Crefname{remark}{Remark}{Remarks}
+
+% ============================================================
+% Running headers
+% ============================================================
+\headers{Distributed Gradient-Regularized Newton Method}{W.~Hu, P.~Xie, Y.-X.~Yuan, and L.~Zhang}
+
+% ============================================================
+% Title and authors
+% ============================================================
+\title{Distributed Gradient-Regularized Newton Method:
+	Scheduled Consensus and \texorpdfstring{$\mathcal{O}(\varepsilon^{-1})$}{O(eps\^{}-1)} Global Iteration Complexity%
+	\thanks{Submitted to the editors March~3, 2026.
+		\funding{The work of W.~Hu, Y.-X.~Yuan, and L.~Zhang was supported in part by NSFC and the Chinese Academy of Sciences.
+		The work of P.~Xie was supported in part by the U.S.\ Department of Energy, Office of Science.}}}
+
+\author{
+	Wei Hu\thanks{
+		LSEC, ICMSEC, Academy of Mathematics and Systems Science,
+		Chinese Academy of Sciences, Beijing 100190, China;
+		and University of Chinese Academy of Sciences, Beijing 100049, China
+		(\email{huwei@amss.ac.cn}).
+	}
+	\and
+	Pengcheng Xie\thanks{
+		Lawrence Berkeley National Laboratory,
+		Berkeley, CA 94720, USA
+		(\email{pxie98@gmail.com}).
+	}
+	\and
+	Ya-Xiang Yuan\thanks{
+		LSEC, ICMSEC, Academy of Mathematics and Systems Science,
+		Chinese Academy of Sciences, Beijing 100190, China
+		(\email{yyx@lsec.cc.ac.cn}).
+		Corresponding author.
+	}
+	\and
+	Li Zhang\thanks{
+		LSEC, ICMSEC, Academy of Mathematics and Systems Science,
+		Chinese Academy of Sciences, Beijing 100190, China
+		(\email{zhangli2022@lsec.cc.ac.cn}).
+	}
+}
+
+% ============================================================
+% Macros
+% ============================================================
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\one}{\mathbf{1}}
+\newcommand{\ip}[2]{\left\langle #1,#2\right\rangle}
+\newcommand{\norm}[1]{\left\|#1\right\|}
+\newcommand{\normtwo}[1]{\left\|#1\right\|_2}
+\newcommand{\normF}[1]{\left\|#1\right\|_F}
+\newcommand{\cO}{\mathcal{O}}
+\newcommand{\J}{\left(\frac{1}{N}\one\one^\top\right)}
+\newcommand{\Pmat}{I-\J}
+\DeclareMathOperator{\blkdiag}{blkdiag}
+
+\newcommand{\barx}{\bar x}
+\newcommand{\barg}{\bar g}
+\newcommand{\bars}{\bar s}
+
+% ============================================================
+% Fix: cleveref + ntheorem + siamart171218 + TeX Live 2025
+% ============================================================
+% In TeX Live 2025, hyperref uses a socket mechanism for
+% \refstepcounter.  The SIAM cls's simplified \refstepcounter
+% (identical to the kernel version) is saved by cleveref as
+% \cref@old@refstepcounter, which bypasses \H@refstepcounter
+% and leaves \cref@currentlabel unset.  We patch
+% \refstepcounter@optarg to go through \H@refstepcounter
+% (cleveref-patched) so that \cref@currentlabel is populated
+% before \cref@override@label@type is called.
+\makeatletter
+\def\refstepcounter@optarg[#1]#2{%
+  \H@refstepcounter{#2}%
+  \@ifundefined{cref@#1@alias}%
+    {\def\@tempa{#1}}%
+    {\def\@tempa{\csname cref@#1@alias\endcsname}}%
+  \protected@edef\cref@currentlabel{%
+    \expandafter\cref@override@label@type%
+      \cref@currentlabel\@nil{\@tempa}}}%
+\makeatother
+
+\emergencystretch=2em
+\allowdisplaybreaks
+
+%%% Overleaf xr helper
+\makeatletter
+\newcommand*{\addFileDependency}[1]{%
+  \typeout{(#1)}%
+  \@addtofilelist{#1}%
+  \IfFileExists{#1}{}{\typeout{No file #1.}}%
+}
+\makeatother
+\newcommand*{\myexternaldocument}[1]{%
+    \externaldocument{#1}%
+    \addFileDependency{#1.tex}%
+    \addFileDependency{#1.aux}%
+}
