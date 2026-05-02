@@ -1,14 +1,14 @@
 """
-run_comm.py – Communication-cost study (two parts).
+run_comm.py -Communication-cost study (two parts).
 
-Part 1 – Ce benefit
+Part 1 -Ce benefit
     Compare DisGrem vs CeDisGrem and AdaDisGrem vs CeAdaDisGrem to show
     communication savings from compression.  Output: precision-vs-comm figure
     and savings table.
 
-Part 2 – Klazy and compression ablation
-    2a) Klazy sweep   – CeDisGrem with Klazy in {1, 5, 10, 20, 40, 80}
-    2b) Compress sweep – CeDisGrem with full / topk(5,10,20,50%) / lowrank(1,2,d//5,d//2)
+Part 2 -Klazy and compression ablation
+    2a) Klazy sweep   -CeDisGrem with Klazy in {1, 5, 10, 20, 40, 80}
+    2b) Compress sweep -CeDisGrem with full / topk(5,10,20,50%) / lowrank(1,2,d//5,d//2)
 """
 
 from __future__ import annotations
@@ -30,12 +30,10 @@ from utils.helper.run_utils import detect_diverged
 from utils.export.plot_utils import fig_ce_benefit, fig_comm_ablation
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Constants
-# ═════════════════════════════════════════════════════════════════════════════
 _COMM_FUNCS = ["ridge", "logsumexp", "huber", "logreg_real"]
 _TOL_LEVELS = [1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10]
-_NSTART     = 5
+_NSTART     = int(os.environ.get("LOG_SCHEDULE_NSTART", "5"))
 _DIM        = 30
 _N_WORKERS  = min(8, max(1, (os.cpu_count() or 4) - 2))
 
@@ -64,9 +62,7 @@ def _compress_configs(d):
     ]
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Shared helpers
-# ═════════════════════════════════════════════════════════════════════════════
 
 def _set_blas_single():
     for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS",
@@ -161,9 +157,7 @@ def _run_one_alg(obj_name, alg_name, mc_idx, P_base, prm_overrides=None):
     }
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Part 1 workers and runner
-# ═════════════════════════════════════════════════════════════════════════════
 
 def _worker_part1(args):
     """Worker for Part 1: returns (obj_name, alg_name, mc_idx, comm_vals)."""
@@ -177,13 +171,13 @@ def _worker_part1(args):
 
 def _run_part1(results_dir):
     print("\n" + "=" * 60)
-    print("  Part 1 – Ce benefit (compression vs full)")
+    print("  Part 1 -Ce benefit (compression vs full)")
     print("=" * 60)
 
     P_base = {
-        "Nagent": 10, "p_edge": 0.5, "maxIt": 500,
+        "Nagent": 10, "p_edge": 0.5, "maxIt": int(os.environ.get("LOG_SCHEDULE_MAXIT", "500")),
         "tol": 1e-12, "tolType": "combo",
-        "verbose": False, "NC": 3, "info": 2,
+        "verbose": False, "NC": 3, "NC_schedule": "log", "log_p": 3.0, "log_c_mix": 2.0, "NC_max": 10, "info": 2,
         "countComm": True,
     }
 
@@ -238,9 +232,7 @@ def _run_part1(results_dir):
     fig_ce_benefit(all_data, _CE_PAIRS, _TOL_LEVELS, results_dir)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Part 2 workers and runners
-# ═════════════════════════════════════════════════════════════════════════════
 
 def _worker_part2(args):
     """Worker for Part 2: returns (obj_name, config_label, mc_idx, relF, commCost)."""
@@ -255,13 +247,13 @@ def _worker_part2(args):
 def _run_part2a(results_dir):
     """Part 2a: Klazy sweep."""
     print("\n" + "-" * 60)
-    print("  Part 2a – Klazy sweep")
+    print("  Part 2a -Klazy sweep")
     print("-" * 60)
 
     P_base = {
-        "Nagent": 10, "p_edge": 0.5, "maxIt": 500,
+        "Nagent": 10, "p_edge": 0.5, "maxIt": int(os.environ.get("LOG_SCHEDULE_MAXIT", "500")),
         "tol": 1e-12, "tolType": "combo",
-        "verbose": False, "NC": 3, "info": 2,
+        "verbose": False, "NC": 3, "NC_schedule": "log", "log_p": 3.0, "log_c_mix": 2.0, "NC_max": 10, "info": 2,
         "countComm": True,
     }
 
@@ -320,13 +312,13 @@ def _run_part2a(results_dir):
 def _run_part2b(results_dir):
     """Part 2b: Compression method/param sweep."""
     print("\n" + "-" * 60)
-    print("  Part 2b – Compression sweep")
+    print("  Part 2b -Compression sweep")
     print("-" * 60)
 
     P_base = {
-        "Nagent": 10, "p_edge": 0.5, "maxIt": 500,
+        "Nagent": 10, "p_edge": 0.5, "maxIt": int(os.environ.get("LOG_SCHEDULE_MAXIT", "500")),
         "tol": 1e-12, "tolType": "combo",
-        "verbose": False, "NC": 3, "info": 2,
+        "verbose": False, "NC": 3, "NC_schedule": "log", "log_p": 3.0, "log_c_mix": 2.0, "NC_max": 10, "info": 2,
         "countComm": True,
     }
 
@@ -387,9 +379,7 @@ def _run_part2b(results_dir):
     print("  Part 2b done.")
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Entry point
-# ═════════════════════════════════════════════════════════════════════════════
 
 def run_comm(part: str = "all") -> None:
     """
@@ -412,3 +402,5 @@ def run_comm(part: str = "all") -> None:
         _run_part2b(results_dir)
 
     print("\n[run_comm] All done.")
+
+

@@ -1,5 +1,5 @@
 """
-main.py – Unified entry point for DisGrem experiment suite.
+main.py - Unified entry point for DisGrem experiment suite.
 
 USAGE
 -----
@@ -18,7 +18,7 @@ MODES
              arg = all | ce | ablation  (default: all)
     ada      Adaptive mechanism: M trajectory + Ada-vs-fixed-M + init-M.
              (no sub-arguments)
-    scale    Dimension scalability study (3 functions × 3 dims × 4 algs × 5 MC).
+    scale    Dimension scalability study (3 functions x 3 dims x 4 algs x 5 MC).
              (no sub-arguments)
     all      Run all four experiments sequentially (default).
 
@@ -144,19 +144,19 @@ def _run_all() -> None:
     """
     _clear_all()
 
-    _banner("Step 1/4 — Regular benchmark (9 functions, d=30, 20 MC)")
+    _banner("Step 1/4 - Regular benchmark (9 functions, d=30, 20 MC)")
     from experiments.benchmarks.run_regular import run_regular
     run_regular("all")
 
-    _banner("Step 2/4 — Communication cost study (Ce benefit + ablation)")
+    _banner("Step 2/4 - Communication cost study (Ce benefit + ablation)")
     from experiments.ablation.run_comm import run_comm
     run_comm("all")
 
-    _banner("Step 3/4 — Adaptive mechanism study (M trajectory + comparisons)")
+    _banner("Step 3/4 - Adaptive mechanism study (M trajectory + comparisons)")
     from experiments.ablation.run_ada import run_ada
     run_ada()
 
-    _banner("Step 4/4 — Robustness study (100 MC + param sweep)")
+    _banner("Step 4/4 - Robustness study (100 MC + param sweep)")
     from experiments.ablation.run_robust import run_robust
     run_robust("all")
 

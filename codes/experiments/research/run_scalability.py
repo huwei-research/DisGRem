@@ -1,5 +1,5 @@
 """
-run_scalability.py – Scalability study: vary N (agents) and d (dimension).
+run_scalability.py - Scalability study: vary N (agents) and d (dimension).
 
 Experiments
 -----------
@@ -12,10 +12,10 @@ For each (algorithm, size), run until convergence and record:
   - total communication cost (MB)
 
 Outputs (results_scalability/)
-  fig_scalability/scalability_panel_<obj>.{pdf,png}   – 2 × 3 panel
-  fig_scalability/scalability_N_<m>_<obj>.{pdf,png}   – individual line plots
+  fig_scalability/scalability_panel_<obj>.{pdf,png}   - 2 x 3 panel
+  fig_scalability/scalability_N_<m>_<obj>.{pdf,png}   - individual line plots
   fig_scalability/scalability_d_<m>_<obj>.{pdf,png}
-  scalability_<obj>.csv                               – full numerical table
+  scalability_<obj>.csv                               - full numerical table
 """
 
 from __future__ import annotations
@@ -124,7 +124,7 @@ def run_scalability(obj_name: str = "ridge") -> None:
 
     # ── Experiment A: vary N ─────────────────────────────────────────────────
     print(f"\n{'='*60}")
-    print(f" Scalability Study – {obj_name}  (vary N, d={_D_FIXED})")
+    print(f" Scalability Study - {obj_name}  (vary N, d={_D_FIXED})")
     print(f"{'='*60}")
 
     for N in _N_VALS:
@@ -157,7 +157,7 @@ def run_scalability(obj_name: str = "ridge") -> None:
 
     # ── Experiment B: vary d ─────────────────────────────────────────────────
     print(f"\n{'='*60}")
-    print(f" Scalability Study – {obj_name}  (vary d, N={_N_FIXED})")
+    print(f" Scalability Study - {obj_name}  (vary d, N={_N_FIXED})")
     print(f"{'='*60}")
 
     for d_val in _D_VALS:
@@ -191,7 +191,7 @@ def run_scalability(obj_name: str = "ridge") -> None:
     # ── Generate figures ─────────────────────────────────────────────────────
     print("\n[Scalability] Generating figures …")
 
-    # 2 × 3 panel figure
+    # 2 x 3 panel figure
     fig_plot_scalability_panel(data_N, data_d, _N_VALS, _D_VALS,
                                 results_dir, obj_name)
 

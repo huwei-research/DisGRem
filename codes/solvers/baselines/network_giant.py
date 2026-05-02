@@ -1,5 +1,5 @@
 """
-network_giant.py – Network-GIANT: Fully Distributed Newton-Type Optimisation
+network_giant.py - Network-GIANT: Fully Distributed Newton-Type Optimisation
 via Harmonic Hessian Consensus.
 
 Reference:
@@ -8,10 +8,10 @@ Reference:
 
 Algorithm (per iteration):
   1. Mixing:     x̃_i  = Σ_j w_ij x_j^k          (primal consensus)
-  2. GT update:  y_i^{k+1} = Σ_j w_ij [y_j^k + ∇f_j(x̃_j) - ∇f_j(x_i^k)]
-  3. Newton dir: n_i  = (H_i(x̃_i) + εI)^{-1} y_i^{k+1}
+  2. GT update:  y_i^{k+1} = Σ_j w_ij [y_j^k + gradf_j(x̃_j) - gradf_j(x_i^k)]
+  3. Newton dir: n_i  = (H_i(x̃_i) + epsI)^{-1} y_i^{k+1}
   4. Dir avg:    n̄_i  = Σ_j w_ij n_j             (harmonic Hessian consensus)
-  5. Update:     x_i^{k+1} = x̃_i - α * n̄_i
+  5. Update:     x_i^{k+1} = x̃_i - alpha * n̄_i
 
 Communication: 3 rounds per iteration (mix x, mix y, mix n).
 
@@ -49,7 +49,7 @@ def network_giant(x0: np.ndarray, prm: dict):
     alpha_s = prm["alpha_step"]
     epsl = prm["epsl"]
     # Hessian regularisation: use "ng_epsl" if provided, else fall back to epsl.
-    # Do NOT use M (DisGrem's proximal parameter) — that is typically too large and
+    # Do NOT use M (DisGrem's proximal parameter) - that is typically too large and
     # would shrink Newton steps, causing NetworkGIANT to converge to a biased point.
     epsl_H = prm.get("ng_epsl", epsl)
     print_freq = max(1, K // 25)
@@ -63,7 +63,7 @@ def network_giant(x0: np.ndarray, prm: dict):
         Y[:, i] = gi
 
     # G_prev is not needed with the corrected GT; kept for compatibility (unused).
-    # G_prev = Y.copy()  # removed — see GT update below
+    # G_prev = Y.copy()  # removed - see GT update below
 
     log_data = init_log(K)
     log_data["xBar"] = np.full((K, d), np.nan)
@@ -102,7 +102,7 @@ def network_giant(x0: np.ndarray, prm: dict):
             G_curr[:, i] = gi
 
         # (2) Gradient tracking update (DIGing-style, captures full update)
-        # y_i^{k+1} = Σ_j w_ij [y_j^k + ∇f_j(x_j^{k+1}) - ∇f_j(x_j^k)]
+        # y_i^{k+1} = Σ_j w_ij [y_j^k + gradf_j(x_j^{k+1}) - gradf_j(x_j^k)]
         # This is applied AFTER the Newton step (see below).
         # G_tilde needed for Newton direction computation only (not GT).
         G_tilde = np.zeros((d, N))
@@ -110,7 +110,7 @@ def network_giant(x0: np.ndarray, prm: dict):
             gi, _ = compute_info(X_tilde[:, i], prm, i, "grad")
             G_tilde[:, i] = gi
 
-        # (3) Local Newton directions: n_i = (H_i(x̃_i) + ε_H·I)^{-1} y_i
+        # (3) Local Newton directions: n_i = (H_i(x̃_i) + eps_H*I)^{-1} y_i
         # Use CURRENT y (before GT update) since x̃ is computed at current x.
         # Adaptive LM regularisation: bound step size far from optimum.
         N_dirs = np.zeros((d, N))
@@ -131,17 +131,17 @@ def network_giant(x0: np.ndarray, prm: dict):
         if prm["countComm"]:
             comm_total += compute_comm_cost(d, Wk, "vector", rounds=NC)
 
-        # (5) Primal update: x_i^{k+1} = x̃_i - α * n̄_i
+        # (5) Primal update: x_i^{k+1} = x̃_i - alpha * n̄_i
         X_new = X_tilde - alpha_s * N_bar
 
         # (6) GT update (DIGing-style): capture full gradient change x^k → x^{k+1}
-        # y_i^{k+1} = Σ_j w_ij [y_j^k + ∇f_j(x^{k+1}) - ∇f_j(x^k)]
+        # y_i^{k+1} = Σ_j w_ij [y_j^k + gradf_j(x^{k+1}) - gradf_j(x^k)]
         G_new = np.zeros((d, N))
         for i in range(N):
             gi, _ = compute_info(X_new[:, i], prm, i, "grad")
             G_new[:, i] = gi
 
-        delta_G = G_new - G_curr              # ∇f(x^{k+1}) - ∇f(x^k) per node
+        delta_G = G_new - G_curr              # gradf(x^{k+1}) - gradf(x^k) per node
         Y_update = Y + delta_G
         Yvec = Y_update.ravel(order="F")
         for _ in range(NC):

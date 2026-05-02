@@ -1,5 +1,5 @@
 """
-run_utils.py – Shared utilities for experiment run scripts.
+run_utils.py - Shared utilities for experiment run scripts.
 
 Centralises divergence detection, figure-directory creation, and other
 helpers that were previously duplicated across run_regular / run_comm /

@@ -1,5 +1,5 @@
 """
-generate_paper_table.py – Generate LaTeX-formatted summary table from results/summary.txt
+generate_paper_table.py - Generate LaTeX-formatted summary table from results/summary.txt
 
 Usage:  python generate_paper_table.py
 Output: results/paper_table.tex   (main comparison table)
@@ -9,11 +9,11 @@ Table structure
 ---------------
 Main table (Table I):
   Rows = algorithms, grouped as: Proposed (2nd-order) | Proposed (quasi) | 1st-order baselines
-  Cols = objectives × {Steps, relF}
+  Cols = objectives x {Steps, relF}
 
 Second-order table (Table II):
   Rows = algorithms, grouped as: Proposed (2nd-order) | 2nd-order baselines
-  Cols = objectives × {Steps, relF}
+  Cols = objectives x {Steps, relF}
 """
 
 import os
@@ -64,7 +64,7 @@ if os.path.isfile(summary_path):
                     except Exception:
                         pass
 else:
-    print(f"[Warning] {summary_path} not found – generating empty table skeleton.")
+    print(f"[Warning] {summary_path} not found - generating empty table skeleton.")
 
 # ── Objective and algorithm configuration ─────────────────────────────────
 
@@ -223,14 +223,14 @@ def _build_table(obj_list, alg_list, groups, caption, label, caption_note=""):
     lines.append(fr"\begin{{tabular}}{{{cols}}}")
     lines.append(r"\toprule")
 
-    # Header row 1 – objective names spanning 3 cols each
+    # Header row 1 - objective names spanning 3 cols each
     hdr1 = "Algorithm"
     for o in obj_avail:
         hdr1 += r" & \multicolumn{3}{c}{" + OBJ_LABEL.get(o, o) + "}"
     lines.append(hdr1 + r" \\")
     lines.append(r"\cmidrule(lr){2-" + str(1 + 3 * n_obj) + r"}")
 
-    # Header row 2 – Steps | relF | Comm per objective
+    # Header row 2 - Steps | relF | Comm per objective
     hdr2 = ""
     for _ in obj_avail:
         hdr2 += r" & \footnotesize Steps & \footnotesize relF & \footnotesize Comm"

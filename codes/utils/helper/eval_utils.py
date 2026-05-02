@@ -1,5 +1,5 @@
 """
-eval_utils.py – approx_grad, approx_hess, compute_info, eval_all, grad_hess_all
+eval_utils.py - approx_grad, approx_hess, compute_info, eval_all, grad_hess_all
 Ported from MATLAB: approx_grad.m, approx_hess.m, compute_info.m, eval_all.m
 """
 
@@ -154,7 +154,7 @@ def grad_hess_all(x: np.ndarray, fname: str,
         if mode in ("grad", "both"):
             g = A.T @ (r / sqrt_s2)
         if mode in ("hess", "both"):
-            d2phi = 1.0 / (s2 * sqrt_s2)     # = 1/(1+(r/δ)²)^{3/2}
+            d2phi = 1.0 / (s2 * sqrt_s2)     # = 1/(1+(r/delta)^2)^{3/2}
             H = A.T @ (d2phi[:, None] * A)
 
     elif fname == "linlog":
@@ -196,7 +196,7 @@ def grad_hess_all(x: np.ndarray, fname: str,
                 H += np.diag(diag_r)
 
     elif fname == "rosenbrock":
-        # f = Σ_{k} 100(x_{2k+1} - x_{2k}²)² + (x_{2k} - 1)²
+        # f = Σ_{k} 100(x_{2k+1} - x_{2k}^2)^2 + (x_{2k} - 1)^2
         xo = x[::2]    # even-indexed
         xe = x[1::2]   # odd-indexed
         r = xe - xo ** 2
@@ -214,7 +214,7 @@ def grad_hess_all(x: np.ndarray, fname: str,
             H[idx_o, idx_e] = -400.0 * xo
 
     elif fname == "styblinski_tang":
-        # f = Σ_i (x_i⁴ - 16x_i² + 5x_i)
+        # f = Σ_i (x_i⁴ - 16x_i^2 + 5x_i)
         if mode in ("grad", "both"):
             g = 4.0 * x ** 3 - 32.0 * x + 5.0
         if mode in ("hess", "both"):
@@ -227,7 +227,7 @@ def grad_hess_all(x: np.ndarray, fname: str,
 
 
 def _sigmoid(z: np.ndarray) -> np.ndarray:
-    """Numerically stable sigmoid — no overflow warnings."""
+    """Numerically stable sigmoid - no overflow warnings."""
     out = np.empty_like(z, dtype=float)
     pos = z >= 0
     exp_neg = np.exp(-z[pos])

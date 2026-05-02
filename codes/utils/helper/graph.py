@@ -1,14 +1,14 @@
 """
-graph.py – Random graph generation utilities
+graph.py - Random graph generation utilities
 Ported from MATLAB: GenerateRandomGraph.m, generate_connected_graph.m
 
 Supported topologies
 --------------------
-  random    – connected random geometric graph (default, varies per seed)
-  ring      – cycle graph (deterministic)
-  grid      – 2-D grid / mesh (deterministic)
-  complete  – fully-connected averaging (deterministic)
-  star      – hub-and-spoke (deterministic)
+  random    - connected random geometric graph (default, varies per seed)
+  ring      - cycle graph (deterministic)
+  grid      - 2-D grid / mesh (deterministic)
+  complete  - fully-connected averaging (deterministic)
+  star      - hub-and-spoke (deterministic)
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ def generate_random_graph(N: int, r: float):
 
     Returns
     -------
-    A : (N, N) ndarray – symmetric adjacency matrix
-    W : (N, N) ndarray – Metropolis consensus matrix  W = I − η L
+    A : (N, N) ndarray - symmetric adjacency matrix
+    W : (N, N) ndarray - Metropolis consensus matrix  W = I - eta L
     """
     if not (0 < r <= 1):
         raise ValueError("r must be in (0, 1]")
@@ -80,10 +80,10 @@ def generate_connected_graph(N: int, r: float) -> dict:
 
 
 def _metropolis_weights(A: np.ndarray) -> np.ndarray:
-    """Compute Metropolis–Hastings mixing matrix from adjacency A.
+    """Compute Metropolis-Hastings mixing matrix from adjacency A.
 
     If the standard Metropolis W has any negative eigenvalue (e.g. even-length
-    ring has eigenvalue −1, causing permanent oscillation), the "lazy" variant
+    ring has eigenvalue -1, causing permanent oscillation), the "lazy" variant
     W_lazy = (I + W_metro) / 2 is returned instead.  This shifts all eigenvalues
     into [0, 1] while preserving double-stochasticity.
     For most graphs (random, grid, star) no negative eigenvalues arise and the
@@ -202,11 +202,11 @@ def get_topology_generators() -> dict:
 
     Available topologies
     --------------------
-    random   – connected random geometric graph (radius scales with N)
-    ring     – cycle graph
-    grid     – 2-D grid
-    complete – fully connected
-    star     – hub-and-spoke (hub = node 0)
+    random   - connected random geometric graph (radius scales with N)
+    ring     - cycle graph
+    grid     - 2-D grid
+    complete - fully connected
+    star     - hub-and-spoke (hub = node 0)
     """
     return {
         "random":   lambda N: generate_random_graph(N, max(0.35, min(0.9, 2.8 / N))),

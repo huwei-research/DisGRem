@@ -1,5 +1,5 @@
 """
-obj_factory.py – Build heterogeneous local objective functions.
+obj_factory.py - Build heterogeneous local objective functions.
 
 Supported types (9):
     Convex:      'ridge', 'quadbad', 'logsumexp', 'huber', 'linlog', 'logreg_real'
@@ -62,7 +62,7 @@ def _lse_stable(A: np.ndarray, x: np.ndarray,
 
 
 def _pseudo_huber_vec(r: np.ndarray, delta: float) -> float:
-    """Pseudo-Huber loss (C∞ smooth):  δ²(√(1+(r/δ)²) − 1), summed."""
+    """Pseudo-Huber loss (Cinf smooth):  delta^2(√(1+(r/delta)^2) - 1), summed."""
     return float(delta ** 2 * np.sum(np.sqrt(1.0 + (r / delta) ** 2) - 1.0))
 
 

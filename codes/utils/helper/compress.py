@@ -1,5 +1,5 @@
 """
-compress.py – Matrix compression utilities
+compress.py - Matrix compression utilities
 Ported from MATLAB: compress.m, compress_topk.m, compress_lowrank.m
 """
 
@@ -45,7 +45,7 @@ def compress(H: np.ndarray, method: str, param: float) -> np.ndarray:
 
     Parameters
     ----------
-    H      : symmetric (d×d) matrix
+    H      : symmetric (dxd) matrix
     method : 'topk' | 'lowrank'
     param  : k for topk, rank r for lowrank
     """

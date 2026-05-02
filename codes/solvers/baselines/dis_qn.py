@@ -1,5 +1,5 @@
 """
-dis_qn.py – DisQN: Distributed Quasi-Newton with local BFGS.
+dis_qn.py - DisQN: Distributed Quasi-Newton with local BFGS.
 Ported from MATLAB: DisQN.m
 """
 
@@ -75,7 +75,7 @@ def dis_qn(x0: np.ndarray, prm: dict):
             X_new[:, i] = xi_new
         X = X_new
 
-        # (2) gradient tracking — batch-compute grads first to avoid O(N²) calls
+        # (2) gradient tracking - batch-compute grads first to avoid O(N^2) calls
         V_prev = V.copy()
         G_new = np.zeros((d, N))
         G_old = np.zeros((d, N))
@@ -87,7 +87,7 @@ def dis_qn(x0: np.ndarray, prm: dict):
         V_new = (V + delta_G) @ Wk.T                  # (d, N)
         V = V_new
 
-        # (3) BFGS update — use gradient-TRACKING secant (intentional design):
+        # (3) BFGS update - use gradient-TRACKING secant (intentional design):
         # V converges to the global average gradient, so V_new - V_old approximates
         # H_bar @ s_bar, building C_i → H_bar^{-1} (global curvature, not local H_i^{-1}).
         # This is preferable because the search direction D = -C @ V targets the global optimum.
@@ -107,9 +107,9 @@ def dis_qn(x0: np.ndarray, prm: dict):
         Z = (Wk @ D.T).T
 
         # Communication accounting:
-        #   Round 1 – primal mixing in step (1): X + alpha*Z mixed together
-        #   Round 2 – gradient tracking in step (2): V updated via W-consensus
-        #   Round 3 – direction propagation in step (4): Z = W D
+        #   Round 1 - primal mixing in step (1): X + alpha*Z mixed together
+        #   Round 2 - gradient tracking in step (2): V updated via W-consensus
+        #   Round 3 - direction propagation in step (4): Z = W D
         # Each round exchanges one d-dimensional vector per edge.
         if prm["countComm"]:
             comm_total += 3 * compute_comm_cost(d, Wk, "vector")

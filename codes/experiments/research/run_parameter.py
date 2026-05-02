@@ -1,21 +1,21 @@
 """
-run_parameter.py – Parameter sensitivity study.
+run_parameter.py - Parameter sensitivity study.
 Ported from MATLAB: run_parameter.m / run_parameter_by_alg.m
 
 Enhancements over original
 ---------------------------
-  Sweep #1 – M regularisation factor    (M ∈ {0.05, 0.1, 0.5, 1.0, 3.0} × L_max)
-  Sweep #2 – step size α numerator      (α ∈ {0.02, 0.05, 0.1, 0.3, 0.5})
-  Sweep #3 – consensus rounds NC        (NC ∈ {1, 2, 3, 5, 8})
+  Sweep #1 - M regularisation factor    (M ∈ {0.05, 0.1, 0.5, 1.0, 3.0} x L_max)
+  Sweep #2 - step size alpha numerator      (alpha ∈ {0.02, 0.05, 0.1, 0.3, 0.5})
+  Sweep #3 - consensus rounds NC        (NC ∈ {1, 2, 3, 5, 8})
   
   Algorithms: DisGrem, CeDisGrem, AdaDisGrem, EXTRA, DIGing
   Problems  : ridge, logsumexp, huber  (one run per (alg, sweep, config))
 
 Outputs (results_param/)
-  param_study/<alg>_M_steps_vs_<metric>.{pdf,png}    – M sweep curves
-  param_study/<alg>_alpha_steps_vs_<metric>.{pdf,png} – α sweep curves
-  param_study/<alg>_NC_steps_vs_<metric>.{pdf,png}    – NC sweep curves
-  param_study/param_summary.csv                        – full table
+  param_study/<alg>_M_steps_vs_<metric>.{pdf,png}    - M sweep curves
+  param_study/<alg>_alpha_steps_vs_<metric>.{pdf,png} - alpha sweep curves
+  param_study/<alg>_NC_steps_vs_<metric>.{pdf,png}    - NC sweep curves
+  param_study/param_summary.csv                        - full table
 """
 
 from __future__ import annotations
@@ -141,7 +141,7 @@ def run_parameter(alg_names: list = None) -> None:
 
     for obj_name in _PARAM_OBJS:
         print(f"\n{'='*60}")
-        print(f" Parameter Sensitivity – {obj_name}")
+        print(f" Parameter Sensitivity - {obj_name}")
         print(f"{'='*60}")
 
         d = P_base["d_override"]
@@ -163,7 +163,7 @@ def run_parameter(alg_names: list = None) -> None:
 
         for alg_name in alg_names:
             if alg_name not in alg_registry:
-                print(f"[Warning] '{alg_name}' not in registry – skipping.")
+                print(f"[Warning] '{alg_name}' not in registry - skipping.")
                 continue
 
             alg_func = alg_registry[alg_name]
@@ -187,10 +187,10 @@ def run_parameter(alg_names: list = None) -> None:
                             cfg["label"], lg)
 
             # ── Sweep 2: alpha ────────────────────────────────────────────
-            print(f"  [α sweep]")
+            print(f"  [alpha sweep]")
             a_configs = [
                 {
-                    "label": f"α={a}",
+                    "label": f"alpha={a}",
                     "M":      _REF_M_FACTOR * L_max,
                     "alpha":  a / L_max,
                     "NC":     _REF_NC,

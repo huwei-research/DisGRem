@@ -1,5 +1,5 @@
 """
-diging.py – DIGing: Distributed Inexact Gradient and Gradient Tracking.
+diging.py - DIGing: Distributed Inexact Gradient and Gradient Tracking.
 
 Reference:
     Nedic, A., Olshevsky, A., & Shi, W. (2017).
@@ -7,11 +7,11 @@ Reference:
     time-varying graphs. SIAM Journal on Optimization, 27(4), 2597-2633.
 
 Iteration:
-    y^0        = ∇F(x^0)   (gradient tracker)
-    x^{k+1}   = W x^k − α y^k
-    y^{k+1}   = W y^k + ∇F(x^{k+1}) − ∇F(x^k)
+    y^0        = gradF(x^0)   (gradient tracker)
+    x^{k+1}   = W x^k - alpha y^k
+    y^{k+1}   = W y^k + gradF(x^{k+1}) - gradF(x^k)
 
-DIGing mixes x first then applies gradient — following the original Nedic et al. formulation.
+DIGing mixes x first then applies gradient - following the original Nedic et al. formulation.
 Converges linearly to exact consensus for strongly convex, smooth objectives.
 """
 
@@ -29,7 +29,7 @@ def diging(x0: np.ndarray, prm: dict):
 
     prm extra fields:
         .alpha        stepsize (required)
-        .decay_alpha  bool – use α/√k  [False]
+        .decay_alpha  bool - use alpha/√k  [False]
         .NC           consensus rounds  [1]
     """
     p = {
@@ -43,8 +43,8 @@ def diging(x0: np.ndarray, prm: dict):
     p.update(prm)
     prm = p
     assert prm["alpha"] is not None, "stepsize alpha is required for DIGing"
-    # DIGing uses alpha ≈ 0.5/L for best convergence.
-    # Use algorithm-specific override if provided, otherwise 2.5× the base alpha
+    # DIGing uses alpha approx 0.5/L for best convergence.
+    # Use algorithm-specific override if provided, otherwise 2.5x the base alpha
     # (corresponding to 0.5/L when base alpha = 0.2/L).
     if prm["alpha_diging"] is not None:
         prm["alpha"] = float(prm["alpha_diging"])
@@ -59,7 +59,7 @@ def diging(x0: np.ndarray, prm: dict):
     G = np.zeros((d, N))
     for i in range(N):
         G[:, i] = approx_grad(f[i], x0.ravel())
-    Y = G.copy()    # gradient tracker, initialised at ∇F(x^0)
+    Y = G.copy()    # gradient tracker, initialised at gradF(x^0)
 
     log_data = init_log(K)
     log_data["xBar"] = np.full((K, d), np.nan)
@@ -114,7 +114,7 @@ def diging(x0: np.ndarray, prm: dict):
         Wk = get_W(prm["W"], k)
         Mix = np.kron(Wk, np.eye(d))
 
-        # (1) primal update: x^{k+1} = W x^k - α y^k
+        # (1) primal update: x^{k+1} = W x^k - alpha y^k
         Xvec = X.ravel(order="F")
         Yvec = Y.ravel(order="F")
         for _ in range(prm["NC"]):
@@ -129,7 +129,7 @@ def diging(x0: np.ndarray, prm: dict):
             G[:, i] = approx_grad(f[i], X_new[:, i])
         dG = G - G_prev
 
-        # (3) gradient tracker: y^{k+1} = W y^k + ∇F(x^{k+1}) - ∇F(x^k)
+        # (3) gradient tracker: y^{k+1} = W y^k + gradF(x^{k+1}) - gradF(x^k)
         Yvec = Y.ravel(order="F")
         for _ in range(prm["NC"]):
             Yvec = Mix @ Yvec

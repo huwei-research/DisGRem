@@ -1,5 +1,5 @@
 """
-dis_greqm.py – DisGreQm: Distributed Gradient-Regularised Quasi-Newton (BFGS).
+dis_greqm.py - DisGreQm: Distributed Gradient-Regularised Quasi-Newton (BFGS).
 Ported from MATLAB: DisGreQm.m
 """
 
@@ -109,7 +109,7 @@ def dis_greqm(x0: np.ndarray, prm: dict):
         # BFGS update: use TRUE gradient secant (G_new at x_new, G_true_prev at x_old)
         # then mix s and y across agents for distributed curvature sharing
         S_diff = X - X_old
-        Y_diff = G_new - G_true_prev       # correct secant: ∇f(x_new) - ∇f(x_old)
+        Y_diff = G_new - G_true_prev       # correct secant: gradf(x_new) - gradf(x_old)
         Svec = S_diff.ravel(order="F"); Yvec = Y_diff.ravel(order="F")
         for _ in range(prm["NC"]):
             Svec = Mix @ Svec; Yvec = Mix @ Yvec
@@ -122,7 +122,7 @@ def dis_greqm(x0: np.ndarray, prm: dict):
         for i in range(N):
             si = S_diff[:, i]; yi = Y_diff[:, i]
             # Relative curvature condition (Wolfe-style): s'y > eps * ||s|| * ||y||
-            # Tighter than absolute threshold — avoids ill-conditioned BFGS updates
+            # Tighter than absolute threshold - avoids ill-conditioned BFGS updates
             ys_thresh = 1e-8 * (np.linalg.norm(si) * np.linalg.norm(yi))
             if si @ yi > max(ys_thresh, 1e-16):
                 rho_i = 1.0 / (yi @ si)

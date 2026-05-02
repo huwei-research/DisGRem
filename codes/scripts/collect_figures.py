@@ -1,5 +1,5 @@
 """
-collect_figures.py – Collect all paper-ready figures into a flat directory.
+collect_figures.py - Collect all paper-ready figures into a flat directory.
 
 Usage:
     python collect_figures.py                    # default: paper_figures/
@@ -18,7 +18,7 @@ import shutil
 import argparse
 from pathlib import Path
 
-_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
+_ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ── Rename mapping ─────────────────────────────────────────────────────────
 # Map source basenames (without extension) to paper-friendly names.

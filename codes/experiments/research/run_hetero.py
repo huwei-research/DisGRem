@@ -1,9 +1,9 @@
 """
-run_hetero.py – Data heterogeneity experiment on logistic regression.
+run_hetero.py - Data heterogeneity experiment on logistic regression.
 
 Compares algorithm performance under two data partitioning schemes:
-  IID     – samples randomly shuffled across agents (default in obj_factory)
-  Non-IID – samples sorted by label before partitioning, so each agent
+  IID     - samples randomly shuffled across agents (default in obj_factory)
+  Non-IID - samples sorted by label before partitioning, so each agent
             holds a skewed class distribution
 
 Output: results_hetero/

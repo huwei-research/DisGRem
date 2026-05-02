@@ -1,10 +1,10 @@
 """
-run_ablation.py – Ablation study for DisGrem family.
+run_ablation.py - Ablation study for DisGrem family.
 
 Systematically isolates the contribution of each algorithmic component:
-  1. NC sweep     – consensus rounds {1, 3, 5} on DisGrem
-  2. Klazy sweep  – Hessian tracking period {1, 20, 80} on CeDisGrem
-  3. Adaptive M   – fixed M vs adaptive LM (AdaDisGrem vs DisGrem)
+  1. NC sweep     - consensus rounds {1, 3, 5} on DisGrem
+  2. Klazy sweep  - Hessian tracking period {1, 20, 80} on CeDisGrem
+  3. Adaptive M   - fixed M vs adaptive LM (AdaDisGrem vs DisGrem)
 
 Test functions: ridge, logsumexp, rosenbrock (convex + non-convex representative)
 Output: results_ablation/

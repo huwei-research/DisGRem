@@ -1,8 +1,8 @@
 """
-run_scalability.py – Dimension-scalability study.
+run_scalability.py -Dimension-scalability study.
 
-Runs 3 representative functions × 3 dimensions × 4 algorithms × 5 MC.
-Produces a 3×3 grid figure (rows = functions, cols = dimensions) of
+Runs 3 representative functions x 3 dimensions x 4 algorithms x 5 MC.
+Produces a 3x3 grid figure (rows = functions, cols = dimensions) of
 relF vs iteration, suitable for a half-page scalability subsection.
 """
 
@@ -29,7 +29,7 @@ _N_WORKERS = min(8, max(1, (os.cpu_count() or 4) - 2))
 
 _FUNCTIONS = ["ridge", "logsumexp", "rosenbrock"]
 _DIMS = [30, 100, 200]
-_N_MC = 5
+_N_MC = int(os.environ.get("LOG_SCHEDULE_NSTART", "5"))
 _ALG_MODE = "ScaleStudy"
 
 _MAXITS = {
@@ -106,10 +106,10 @@ def run_scalability() -> dict:
     os.makedirs(os.path.join(results_dir, "paper"), exist_ok=True)
 
     P = {
-        "Nagent": 10, "p_edge": 0.5, "maxIt": 500,
+        "Nagent": 10, "p_edge": 0.5, "maxIt": int(os.environ.get("LOG_SCHEDULE_MAXIT", "500")),
         "tol": 1e-12, "tolType": "combo", "verbose": False,
         "showPlots": False, "far": False, "useWorst": False,
-        "nStart": _N_MC, "d_override": 30, "info": 2, "NC": 3,
+        "nStart": _N_MC, "d_override": 30, "info": 2, "NC": 3, "NC_schedule": "log", "log_p": 3.0, "log_c_mix": 2.0, "NC_max": 10,
         "countComm": True,
     }
 
@@ -175,7 +175,7 @@ def run_scalability() -> dict:
 
                     f0_val = f0_vals[-1] if f0_vals else np.nan
                     f_star = float(np.mean(f_opt_list))
-                    log_merged = merge_logs(logs_each, False, f0_val, f_star)
+                    log_merged = merge_logs(logs_each, False, f0_val, f_star, use_median=True)
                     all_results[key] = log_merged
 
                     with open(cache_path, "wb") as fh:
@@ -193,7 +193,7 @@ def run_scalability() -> dict:
 
 
 def _plot_scalability_grid(all_results: dict, results_dir: str) -> None:
-    """3×3 grid: rows = functions, cols = dimensions."""
+    """3x3 grid: rows = functions, cols = dimensions."""
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -257,8 +257,10 @@ def _plot_scalability_grid(all_results: dict, results_dir: str) -> None:
         fig.savefig(os.path.join(out_dir, f"scalability_grid.{ext}"),
                     dpi=600, bbox_inches="tight")
     plt.close(fig)
-    print(f"  [plot] Saved scalability_grid.pdf/png → {out_dir}")
+    print(f"  [plot] Saved scalability_grid.pdf/png 鈫?{out_dir}")
 
 
 if __name__ == "__main__":
     run_scalability()
+
+

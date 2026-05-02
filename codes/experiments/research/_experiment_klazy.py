@@ -26,12 +26,12 @@ A) STALENESS GUARD COMPARISON (CeDisGrem, topk 5%d^2, K=500)
 
 B) KLAZY AUTO-SELECTION STRATEGIES (topk, K=500)
 ────────────────────────────────────────────────
-  ridge:    所有策略 97-100步(Klazy≥5), Klazy=1仅41步
-  lse:      所有策略 264-271步(Klazy≥5), Klazy=1仅67步
+  ridge:    所有策略 97-100步(Klazy>=5), Klazy=1仅41步
+  lse:      所有策略 264-271步(Klazy>=5), Klazy=1仅67步
   huber:    所有策略 500步 combo~2e-10, Klazy=1反而500步SLOW(5e-2)
   rosen:    所有策略 500步 SLOW(3.4-3.7), Klazy=1也SLOW(2.5)
 
-  关键发现：在topk压缩下，Klazy=5到80几乎无差异——压缩误差主导了收敛行为，
+  关键发现：在topk压缩下，Klazy=5到80几乎无差异--压缩误差主导了收敛行为，
   惰性频率已经不是瓶颈。策略选择的效果被压缩噪声淹没。
   → 结论：Klazy选取策略在当前压缩精度下无关紧要。
 
@@ -46,7 +46,7 @@ C) COMPRESSION METHOD COMPARISON (Klazy=10, K=500, d=10)
   关键发现：
   1. lowrank压缩对rosenbrock完全失败（所有秩都不行）
      → Hessian修正量的有效秩不低，低秩近似丢失关键信息
-  2. topk有一个临界阈值：k=5%d²失败，k≥10%d²成功
+  2. topk有一个临界阈值：k=5%d^2失败，k>=10%d^2成功
      → 默认参数从5%提高到10%
   3. 无压缩+Klazy=10是最佳组合（375步OK，52.7MB）
      vs topk10%+Klazy=10（380步OK，54.0MB）仅多5步且通信相当
@@ -56,10 +56,10 @@ C) COMPRESSION METHOD COMPARISON (Klazy=10, K=500, d=10)
 RECOMMENDATIONS
 ═══════════════════════════════════════════════════════════════════════════════
 
-  1. 默认 compressParam 从 5%d² 提高到 10%d²（已实施）
-  2. 移除 Klazy>1 时的 staleness guard（已实施，论文δ公式就够了）
+  1. 默认 compressParam 从 5%d^2 提高到 10%d^2（已实施）
+  2. 移除 Klazy>1 时的 staleness guard（已实施，论文delta公式就够了）
   3. 非凸问题建议：compressH=False + Klazy=5~20（不压缩但少发Hessian）
-  4. 大维度(d>50)凸问题：topk 10%d² + Klazy=5~10 是好的折中
+  4. 大维度(d>50)凸问题：topk 10%d^2 + Klazy=5~10 是好的折中
   5. lowrank 压缩仅推荐用于二次/近二次问题（ridge, quadbad）
   6. 未来方向：自适应压缩参数（根据 ||Hdiff|| 动态调整 k 或 r）
 

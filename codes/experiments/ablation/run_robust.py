@@ -1,19 +1,19 @@
 """
-run_robust.py – Robustness analysis (two parts), with parallel acceleration.
+run_robust.py - Robustness analysis (two parts), with parallel acceleration.
 
-Part 1 – Starting-point robustness
-  100 Monte-Carlo runs × {near, far} × all 9 functions.
+Part 1 - Starting-point robustness
+  100 Monte-Carlo runs x {near, far} x all 9 functions.
   Starting points sampled uniformly in a d-ball of radius r_near / r_far
   centred at each function's default starting point.
-  Uses ProcessPoolExecutor for ~10× speedup on multi-core machines.
+  Uses ProcessPoolExecutor for roughly 10x speedup on multi-core machines.
   Output: 2 success-rate heatmap tables (one per scenario) + CSV.
 
-Part 2 – Parameter sensitivity
+Part 2 - Parameter sensitivity
   Sweep alpha / M with gradient-coloured convergence curves.
-  3 algorithm groups × 4 functions:
-    DisGrem (no Ada) : DisGrem, CeDisGrem – sweep α and M
-    First-order      : EXTRA, DIGing      – sweep α
-    Second-order     : DQM, ESOM, SONATA, NetworkGIANT – sweep α
+  3 algorithm groups x 4 functions:
+    DisGrem (no Ada) : DisGrem, CeDisGrem - sweep alpha and M
+    First-order      : EXTRA, DIGing - sweep alpha
+    Second-order     : DQM, ESOM, SONATA, NetworkGIANT - sweep alpha
   Output: 12 gradient-colour sweep figures.
 """
 
@@ -38,17 +38,15 @@ from utils.export.plot_utils import (fig_success_rate_table,
                                       fig_param_sweep_combined)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Constants
-# ═════════════════════════════════════════════════════════════════════════════
-_NSTART_PART1 = 100
+_NSTART_PART1 = int(os.environ.get("LOG_SCHEDULE_NSTART_PART1", "100"))
 _TOL          = 1e-6
 _R_NEAR       = 1.0
 _R_FAR        = 3.0
 
 _SWEEP_FUNCS   = ["ridge", "logsumexp", "logreg_real", "logreg_ncvr"]
 _SWEEP_FACTORS = [0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
-_NSTART_SWEEP  = 5
+_NSTART_SWEEP  = int(os.environ.get("LOG_SCHEDULE_NSTART", "5"))
 
 _ALL_FUNCS = ["ridge", "quadbad", "logsumexp", "huber", "linlog",
               "logreg_real", "rosenbrock", "styblinski_tang", "logreg_ncvr"]
@@ -56,9 +54,7 @@ _ALL_FUNCS = ["ridge", "quadbad", "logsumexp", "huber", "linlog",
 _N_WORKERS = min(10, max(1, (os.cpu_count() or 4) - 2))
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Helpers
-# ═════════════════════════════════════════════════════════════════════════════
 
 def _sample_in_ball(center: np.ndarray, radius: float,
                     rng: np.random.RandomState) -> np.ndarray:
@@ -111,9 +107,7 @@ def _set_single_thread_blas():
         os.environ[k] = "1"
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  Part 1 – Parallel worker
-# ═════════════════════════════════════════════════════════════════════════════
+#  Part 1 - Parallel worker
 
 def _worker_mc_part1(args):
     """
@@ -164,21 +158,19 @@ def _worker_mc_part1(args):
     return results
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  Part 1 – Starting-point robustness (parallel)
-# ═════════════════════════════════════════════════════════════════════════════
+#  Part 1 - Starting-point robustness (parallel)
 
 def _run_part1(results_dir: str) -> None:
     print("\n" + "=" * 72)
-    print("  Part 1 – Starting-point robustness")
-    print(f"  ({_NSTART_PART1} MC × {len(_ALL_FUNCS)} functions × 2 scenarios,"
+    print("  Part 1 - Starting-point robustness")
+    print(f"  ({_NSTART_PART1} MC x {len(_ALL_FUNCS)} functions x 2 scenarios,"
           f" {_N_WORKERS} workers)")
     print("=" * 72)
 
     P = {
-        "Nagent": 10, "p_edge": 0.5, "maxIt": 500,
+        "Nagent": 10, "p_edge": 0.5, "maxIt": int(os.environ.get("LOG_SCHEDULE_MAXIT", "500")),
         "tol": 1e-12, "tolType": "combo",
-        "verbose": False, "NC": 3, "info": 2,
+        "verbose": False, "NC": 3, "NC_schedule": "log", "log_p": 3.0, "log_c_mix": 2.0, "NC_max": 10, "info": 2,
         "countComm": True, "d_override": 30,
     }
 
@@ -196,9 +188,9 @@ def _run_part1(results_dir: str) -> None:
     try:
         with ProcessPoolExecutor(max_workers=_N_WORKERS) as pool:
             for sc_name, radius in scenarios:
-                print(f"\n{'─'*60}")
+                print(f"\n{'-'*60}")
                 print(f"  Scenario: {sc_name}  (radius={radius})")
-                print(f"{'─'*60}")
+                print(f"{'-'*60}")
 
                 success_data = {}
 
@@ -254,9 +246,7 @@ def _run_part1(results_dir: str) -> None:
     print(f"\n[Saved] {csv_path}")
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  Part 2 – Parameter sensitivity (parallel per-factor)
-# ═════════════════════════════════════════════════════════════════════════════
+#  Part 2 - Parameter sensitivity (parallel per-factor)
 
 _SWEEP_GROUPS = [
     {
@@ -367,14 +357,14 @@ def _worker_sweep_factor(args):
 
 def _run_part2(results_dir: str) -> None:
     print("\n" + "=" * 72)
-    print("  Part 2 – Parameter sensitivity")
+    print("  Part 2 - Parameter sensitivity")
     print(f"  ({_N_WORKERS} workers)")
     print("=" * 72)
 
     P = {
-        "Nagent": 10, "p_edge": 0.5, "maxIt": 500,
+        "Nagent": 10, "p_edge": 0.5, "maxIt": int(os.environ.get("LOG_SCHEDULE_MAXIT", "500")),
         "tol": 1e-12, "tolType": "combo",
-        "verbose": False, "NC": 3, "info": 2,
+        "verbose": False, "NC": 3, "NC_schedule": "log", "log_p": 3.0, "log_c_mix": 2.0, "NC_max": 10, "info": 2,
         "countComm": True, "d_override": 30,
     }
 
@@ -466,9 +456,7 @@ def _run_part2(results_dir: str) -> None:
                 os.environ.pop(k, None)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Entry point
-# ═════════════════════════════════════════════════════════════════════════════
 
 def run_robust(part: str = "all") -> None:
     """
@@ -477,9 +465,9 @@ def run_robust(part: str = "all") -> None:
     Parameters
     ----------
     part : 'all' | 'start' | 'param'
-        'start' – Part 1 only (starting-point robustness)
-        'param' – Part 2 only (parameter sensitivity)
-        'all'   – both parts
+        'start' - Part 1 only (starting-point robustness)
+        'param' - Part 2 only (parameter sensitivity)
+        'all'   - both parts
     """
     results_dir = os.path.join(_root, "results", "robust")
     os.makedirs(results_dir, exist_ok=True)
@@ -492,3 +480,5 @@ def run_robust(part: str = "all") -> None:
         _run_part2(results_dir)
 
     print("\n[run_robust] All done.")
+
+

@@ -1,15 +1,15 @@
 """
-extra.py – EXTRA: An Exact First-Order Algorithm for Decentralized Consensus Optimization.
+extra.py - EXTRA: An Exact First-Order Algorithm for Decentralized Consensus Optimization.
 
 Reference:
     Shi, W., Ling, Q., Wu, G., & Yin, W. (2015).
     EXTRA: An exact first-order algorithm for decentralized consensus optimization.
     SIAM Journal on Optimization, 25(2), 944-966.
 
-Iteration (vectorised over N agents, X is d×N):
+Iteration (vectorised over N agents, X is dxN):
     W_half = (I + W) / 2
-    x^1    = W_half x^0 − α ∇F(x^0)
-    x^{k+1}= x^k + W x^k − W_half x^{k-1} − α (∇F(x^k) − ∇F(x^{k-1}))
+    x^1    = W_half x^0 - alpha gradF(x^0)
+    x^{k+1}= x^k + W x^k - W_half x^{k-1} - alpha (gradF(x^k) - gradF(x^{k-1}))
 
 Communication per iteration: one vector-exchange round (cheaper than DGD with tracking).
 Converges linearly to exact consensus for strongly convex, smooth objectives.
@@ -29,7 +29,7 @@ def extra(x0: np.ndarray, prm: dict):
 
     prm extra fields:
         .alpha        stepsize (required)
-        .decay_alpha  bool – use α/√k  [False]
+        .decay_alpha  bool - use alpha/√k  [False]
         .NC           consensus rounds applied to W  [1]
     """
     p = {
@@ -45,9 +45,9 @@ def extra(x0: np.ndarray, prm: dict):
     assert prm["alpha"] is not None, "stepsize alpha is required for EXTRA"
     # Step-size policy for EXTRA:
     #   If an algorithm-specific override 'alpha_extra' is supplied, use it directly.
-    #   Otherwise use the base alpha unchanged — EXTRA can use the same step size
-    #   as other first-order methods (α ≤ 1/L) and still converge linearly.
-    #   The previous 5× auto-scaling caused divergence when alpha was already near 1/L.
+    #   Otherwise use the base alpha unchanged - EXTRA can use the same step size
+    #   as other first-order methods (alpha <= 1/L) and still converge linearly.
+    #   The previous 5x auto-scaling caused divergence when alpha was already near 1/L.
     if prm["alpha_extra"] is not None:
         prm["alpha"] = float(prm["alpha_extra"])
 
@@ -102,7 +102,7 @@ def extra(x0: np.ndarray, prm: dict):
         if not np.all(np.isfinite(X)) or np.any(np.abs(X) > 1e12):
             fail_flag = True; fail_reason = "numerical overflow"; break
 
-        # Logging uses current X (before update) –  consistent with other algs
+        # Logging uses current X (before update) -  consistent with other algs
         x_avg = X.mean(axis=1)
         grad_avg = G_curr.mean(axis=1)
         log_data["gradNrm"][k] = float(np.linalg.norm(grad_avg))
@@ -133,7 +133,7 @@ def extra(x0: np.ndarray, prm: dict):
             break
 
         # ── EXTRA update ──────────────────────────────────────────────────────
-        # x^{k+1} = x^k + W x^k - W_half x^{k-1} - α(g^k - g^{k-1})
+        # x^{k+1} = x^k + W x^k - W_half x^{k-1} - alpha(g^k - g^{k-1})
         alpha_k = prm["alpha"] / np.sqrt(k + 1) if prm["decay_alpha"] else prm["alpha"]
         X_prev_vec = X_prev.ravel(order="F")
         X_curr_vec = X.ravel(order="F")

@@ -1,5 +1,5 @@
 """
-load_dataset.py – Load and preprocess standard ML datasets (LibSVM format).
+load_dataset.py - Load and preprocess standard ML datasets (LibSVM format).
 Ported from MATLAB: load_dataset.m
 
 Supports downloading from LIBSVM repository and caching locally.

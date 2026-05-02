@@ -1,5 +1,5 @@
 """
-ada_disgrem.py – AdaDisGrem (wrapper: no compression, Klazy=1)
+ada_disgrem.py - AdaDisGrem (wrapper: no compression, Klazy=1)
 Ported from MATLAB: AdaDisGrem.m
 """
 

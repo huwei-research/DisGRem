@@ -1,25 +1,25 @@
 """
-run_topology.py – Network topology robustness study.
+run_topology.py - Network topology robustness study.
 
 Systematically evaluates all algorithms across five communication graph
 topologies:
-  random   – connected random geometric graph  (stochastic, re-sampled each trial)
-  ring     – cycle graph                        (deterministic)
-  grid     – 2-D mesh                           (deterministic)
-  complete – fully-connected averaging          (deterministic)
-  star     – hub-and-spoke                      (deterministic)
+  random   - connected random geometric graph  (stochastic, re-sampled each trial)
+  ring     - cycle graph                        (deterministic)
+  grid     - 2-D mesh                           (deterministic)
+  complete - fully-connected averaging          (deterministic)
+  star     - hub-and-spoke                      (deterministic)
 
-For each topology × algorithm × problem the script records:
+For each topology x algorithm x problem the script records:
   - success rate (%) over nStart Monte-Carlo trials
   - average steps to convergence (successful trials)
   - average communication cost in MB (successful trials)
   - spectral gap of the mixing matrix W (network quality indicator)
 
 Outputs (results_topology/):
-  fig_topology/topology_bar.{pdf,png}       – grouped success-rate bar chart
-  fig_topology/topology_heatmap.{pdf,png}   – steps heatmap
-  data_log/topology_summary.csv             – full numerical table
-  topology_report.txt                       – human-readable summary
+  fig_topology/topology_bar.{pdf,png}       - grouped success-rate bar chart
+  fig_topology/topology_heatmap.{pdf,png}   - steps heatmap
+  data_log/topology_summary.csv             - full numerical table
+  topology_report.txt                       - human-readable summary
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ def run_topology(obj_group: str = "core") -> None:
     elif og == "convex":
         obj_names = ["ridge", "quadbad", "logsumexp", "huber", "linlog", "logreg_real"]
     elif og == "all":
-        # 9-function main set (3×3 layout)
+        # 9-function main set (3x3 layout)
         obj_names = ["ridge", "quadbad", "logsumexp", "huber", "linlog", "logreg_real",
                      "rosenbrock", "styblinski_tang", "logreg_ncvr"]
     else:
@@ -245,7 +245,7 @@ def run_topology(obj_group: str = "core") -> None:
 
     # ── Generate figures ──────────────────────────────────────────────────
     print("\n[Topology] Generating figures …")
-    # Primary combined panel (bar + heatmap in one file — paper-ready)
+    # Primary combined panel (bar + heatmap in one file - paper-ready)
     fig_topology_combined_panel(topo_sr_data, topo_steps_data, results_dir,
                                 title="Algorithm robustness across network topologies")
     # Keep individual figures for supplementary material

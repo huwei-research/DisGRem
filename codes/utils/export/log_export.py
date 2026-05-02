@@ -1,5 +1,5 @@
 """
-log_export.py – Export logs to Excel, TXT; merge multiple runs.
+log_export.py - Export logs to Excel, TXT; merge multiple runs.
 Ported from MATLAB: write_log_to_excel.m, write_txt_summary.m,
                     write_sparse_log.m, merge_logs.m
 """
@@ -10,15 +10,29 @@ import warnings
 import numpy as np
 from typing import List, Dict
 
+_MONOTONE_FIELDS = {"relF", "relX", "combo", "gradNrm"}
+
+
+def _running_min(arr: np.ndarray) -> np.ndarray:
+    """Element-wise running minimum, NaN-aware."""
+    out = arr.copy()
+    best = np.inf
+    for i in range(len(out)):
+        if np.isfinite(out[i]):
+            best = min(best, out[i])
+            out[i] = best
+    return out
+
 
 # ─────────────────────────────────────────────────────────────
 #  merge_logs
 # ─────────────────────────────────────────────────────────────
 def merge_logs(log_list: List[Dict], use_worst: bool = False,
-               f0: float = None, f_star: float = None) -> Dict:
+               f0: float = None, f_star: float = None,
+               use_median: bool = False) -> Dict:
     """
     Merge multiple per-run log dicts (one per random start) by averaging
-    (or worst-case) across runs.
+    (or worst-case or median) across runs.
     """
     if not log_list:
         return {}
@@ -39,18 +53,27 @@ def merge_logs(log_list: List[Dict], use_worst: bool = False,
             for ri, r in enumerate(runs):
                 if fname in r:
                     v = np.asarray(r[fname]).ravel()
+                    if fname in _MONOTONE_FIELDS:
+                        v = _running_min(v)
                     mat[:len(v), ri] = v
             with np.errstate(all="ignore"), warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if use_worst:
                     m[fname] = np.nanmax(mat, axis=1)
+                elif use_median:
+                    m[fname] = np.nanmedian(mat, axis=1)
                 else:
                     m[fname] = np.nanmean(mat, axis=1)
+                if fname in _MONOTONE_FIELDS:
+                    m[fname] = _running_min(m[fname])
                 # Store std for shaded-band plotting (only useful when n_run > 1)
                 if n_run > 1:
                     m[fname + "_std"] = np.nanstd(mat, axis=1)
                     m[fname + "_q25"] = np.nanpercentile(mat, 25, axis=1)
                     m[fname + "_q75"] = np.nanpercentile(mat, 75, axis=1)
+                    if fname in _MONOTONE_FIELDS:
+                        m[fname + "_q25"] = _running_min(m[fname + "_q25"])
+                        m[fname + "_q75"] = _running_min(m[fname + "_q75"])
 
         # relF fallback
         if np.all(np.isnan(np.asarray(m.get("relF", [np.nan])).ravel())):
@@ -179,7 +202,7 @@ def write_log_to_excel(logs_each: List[Dict], alg_bank: list,
     try:
         import openpyxl
     except ImportError:
-        print("[Warning] openpyxl not installed – skipping Excel export.")
+        print("[Warning] openpyxl not installed - skipping Excel export.")
         return
 
     os.makedirs(os.path.dirname(filename) or ".", exist_ok=True)

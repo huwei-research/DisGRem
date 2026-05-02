@@ -1,13 +1,13 @@
 """
-run_kappa.py – Condition number sensitivity study on quadbad.
+run_kappa.py - Condition number sensitivity study on quadbad.
 
-Varies the condition number κ from 10 to 10^6 and records steps-to-convergence
+Varies the condition number kappa from 10 to 10^6 and records steps-to-convergence
 for each algorithm, demonstrating the advantage of second-order methods on
 increasingly ill-conditioned problems.
 
 Outputs (results_kappa/):
-  fig_kappa/kappa_sweep.{pdf,png}  – steps vs κ line plot
-  kappa_summary.csv                – full numerical table
+  fig_kappa/kappa_sweep.{pdf,png}  - steps vs kappa line plot
+  kappa_summary.csv                - full numerical table
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def run_kappa() -> None:
 
     for kappa in _KAPPA_VALUES:
         print(f"\n{'='*60}")
-        print(f"  κ = {kappa:.0e}")
+        print(f"  kappa = {kappa:.0e}")
         print(f"{'='*60}")
 
         # quadbad uses the second arg as conditioning parameter

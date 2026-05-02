@@ -1,5 +1,5 @@
 """
-sonata.py – SONATA (Second-Order Surrogate iNcremenTAl distributed optimisation).
+sonata.py - SONATA (Second-Order Surrogate iNcremenTAl distributed optimisation).
 
 Implements the second-order surrogate variant of SONATA from:
   Sun, Scutari, Shi, "Improving the Convergence of Decentralized Gradient Descent
@@ -10,8 +10,8 @@ The algorithm is equivalent to "Gradient Tracking with a local Newton step"
 
 Update rules (per iteration):
   1. Mixing:     x̃_i  = Σ_j w_ij x_j^k          (consensus on primal)
-  2. NT step:    x_i^{k+1} = x̃_i - (H_i(x̃_i) + τI)^{-1} y_i^k
-  3. GT update:  y_i^{k+1} = Σ_j w_ij [y_j^k + ∇f_j(x_j^{k+1}) - ∇f_j(x̃_j)]
+  2. NT step:    x_i^{k+1} = x̃_i - (H_i(x̃_i) + tauI)^{-1} y_i^k
+  3. GT update:  y_i^{k+1} = Σ_j w_ij [y_j^k + gradf_j(x_j^{k+1}) - gradf_j(x̃_j)]
 
 Communication: 2 rounds per iteration (mix x, mix y).
 
@@ -34,7 +34,7 @@ def sonata(x0: np.ndarray, prm: dict):
         # sonata_tau: Tikhonov regularisation added to the surrogate Hessian.
         # Must be SMALL relative to H (otherwise x barely moves and the tracker
         # converges to 0 at a biased non-optimal point).  Use "sonata_tau" in prm
-        # to override; defaults to epsl (≈ pure Newton with minimal regularisation).
+        # to override; defaults to epsl (approx pure Newton with minimal regularisation).
         "sonata_tau": None,   # None → use epsl
         "epsl": 1e-4,         # also serves as default tau when sonata_tau is None
         "maxIt": 200, "tol": 1e-8, "tolType": "combo",
@@ -49,7 +49,7 @@ def sonata(x0: np.ndarray, prm: dict):
     K = prm["maxIt"]
     epsl = prm["epsl"]
     # tau: small Hessian regularisation (like Levenberg-Marquardt).
-    # NOT the DisGrem M parameter — SONATA needs tau << H for accurate Newton steps.
+    # NOT the DisGrem M parameter - SONATA needs tau << H for accurate Newton steps.
     tau = prm.get("sonata_tau", None)
     if tau is None or tau <= 0:
         tau = epsl
@@ -107,9 +107,9 @@ def sonata(x0: np.ndarray, prm: dict):
         if prm["countComm"]:
             comm_total += compute_comm_cost(d, Wk, "vector", rounds=NC)
 
-        # (3) Newton step on surrogate: x_new_i = x̃_i - (H_i(x̃_i) + τI)^{-1} ỹ_i
+        # (3) Newton step on surrogate: x_new_i = x̃_i - (H_i(x̃_i) + tauI)^{-1} ỹ_i
         # Adaptive Levenberg-Marquardt regularisation: when the gradient tracker y is
-        # large (far from optimum), increase tau to bound step size ≤ O(1).  Near the
+        # large (far from optimum), increase tau to bound step size <= O(1).  Near the
         # optimum ||y|| → 0, so tau_lm → tau (pure Newton regime).
         X_new = np.zeros((d, N))
         for i in range(N):
@@ -122,14 +122,14 @@ def sonata(x0: np.ndarray, prm: dict):
                 X_new[:, i] = X_tilde[:, i] - np.linalg.lstsq(D, Y_tilde[:, i], rcond=None)[0]
 
         # (4) Gradient tracking update (correct SONATA/NEXT formula from Scutari & Sun 2022):
-        # y_i^{k+1} = Σ_j w_ij [y_j^k + ∇f_j(x^{k+1}) - ∇f_j(x^k)]
-        # Uses G_curr = ∇f(x^k) (pre-mixing) and ∇f(X_new) = ∇f(x^{k+1}).
+        # y_i^{k+1} = Σ_j w_ij [y_j^k + gradf_j(x^{k+1}) - gradf_j(x^k)]
+        # Uses G_curr = gradf(x^k) (pre-mixing) and gradf(X_new) = gradf(x^{k+1}).
         G_new = np.zeros((d, N))
         for i in range(N):
             gi_new, _ = compute_info(X_new[:, i], prm, i, "grad")
             G_new[:, i] = gi_new
 
-        delta_G = G_new - G_curr            # ∇f(x^{k+1}) - ∇f(x^k)
+        delta_G = G_new - G_curr            # gradf(x^{k+1}) - gradf(x^k)
         Y_update = Y + delta_G
         Yvec = Y_update.ravel(order="F")
         for _ in range(NC):

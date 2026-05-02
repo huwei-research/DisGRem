@@ -1,5 +1,5 @@
 """
-disgrem.py – DisGrem (wrapper: no compression, Klazy=1)
+disgrem.py - DisGrem (wrapper: no compression, Klazy=1)
 Ported from MATLAB: DisGrem.m
 """
 

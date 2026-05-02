@@ -1,5 +1,5 @@
 """
-run_regular.py – Standard benchmark with parallel MC acceleration.
+run_regular.py -Standard benchmark with parallel MC acceleration.
 Ported from MATLAB: run_regular.m
 """
 
@@ -30,7 +30,7 @@ from utils.helper.run_utils import detect_diverged
 _N_WORKERS = min(10, max(1, (os.cpu_count() or 4) - 2))
 
 
-# ── Results directory management ────────────────────────────────────────────
+# -- Results directory management --------------------------------------------
 def clear_results(results_dir: str) -> None:
     """Delete and recreate the results directory tree (call before each full run)."""
     if os.path.exists(results_dir):
@@ -42,14 +42,12 @@ def clear_results(results_dir: str) -> None:
     print(f"[clear_results] Created fresh directory tree under {results_dir}")
 
 
-# ── Main benchmark set (9 functions) ───────────────────────────────────────
+# -- Main benchmark set (9 functions) ---------------------------------------
 _CONVEX_BASES    = ["logsumexp", "huber", "logreg_real"]
 _NONCONVEX_BASES = ["linlog", "rosenbrock", "styblinski_tang", "logreg_ncvr"]
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Parallel worker
-# ═════════════════════════════════════════════════════════════════════════════
 
 def _worker_mc_regular(args):
     """
@@ -63,7 +61,7 @@ def _worker_mc_regular(args):
         os.environ[k] = "1"
 
     alg_bank = get_alg_bank("MainComp")
-    param_bank, M_alpha_policy, x0_generator = init_policy("regular")
+    param_bank, M_alpha_policy, _ = init_policy("regular")
 
     obj_args = param_bank.get(obj_name, [P_dict["d_override"]])
     if obj_args and isinstance(obj_args[0], (int, float)):
@@ -115,9 +113,7 @@ def _worker_mc_regular(args):
     return mc_idx, log_s, f0_val
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Main entry
-# ═════════════════════════════════════════════════════════════════════════════
 
 def run_regular(func_group: str = "all") -> None:
     """
@@ -136,17 +132,17 @@ def run_regular(func_group: str = "all") -> None:
     P = {
         "Nagent":      10,
         "p_edge":      0.5,
-        "maxIt":       500,
+        "maxIt":       int(os.environ.get("LOG_SCHEDULE_MAXIT", "500")),
         "tol":         1e-12,
         "tolType":     "combo",
         "verbose":     True,
         "showPlots":   True,
         "far":         False,
         "useWorst":    False,
-        "nStart":      20,
+        "nStart":      int(os.environ.get("LOG_SCHEDULE_NSTART", "20")),
         "d_override":  30,
         "info":        2,
-        "NC":          3,
+        "NC":          3, "NC_schedule": "log", "log_p": 3.0, "log_c_mix": 2.0, "NC_max": 10,
         "countComm":   True,
     }
 
@@ -168,8 +164,10 @@ def run_regular(func_group: str = "all") -> None:
         obj_list = [fg]
 
     all_logs = {}
+    all_individual = {}
     cache_dir = os.path.join(_root, "_run_cache", "regular")
     os.makedirs(cache_dir, exist_ok=True)
+    use_cache = os.environ.get("DISGREM_USE_CACHE", "0") == "1"
 
     # Force single-threaded BLAS in spawned workers
     _orig_env = {}
@@ -181,16 +179,23 @@ def run_regular(func_group: str = "all") -> None:
     try:
         with ProcessPoolExecutor(max_workers=_N_WORKERS) as pool:
             for obj_name in obj_list:
-                # ── resume from cache ────────────────────────────────
+                # -- resume from cache --------------------------------
                 cache_path = os.path.join(cache_dir, f"{obj_name}.pkl")
-                if os.path.isfile(cache_path):
+                if use_cache and os.path.isfile(cache_path):
                     print(f"\n[resume] Loading cached results for {obj_name}")
                     with open(cache_path, "rb") as fh:
-                        all_logs[obj_name] = pickle.load(fh)
+                        payload = pickle.load(fh)
+                    if (isinstance(payload, dict)
+                            and "merged" in payload
+                            and "individual" in payload):
+                        all_logs[obj_name] = payload["merged"]
+                        all_individual[obj_name] = payload["individual"]
+                    else:
+                        all_logs[obj_name] = payload
                     continue
 
                 print(f"\n{'='*60}")
-                print(f" Objective: {obj_name}  ({_N_WORKERS} workers × "
+                print(f" Objective: {obj_name}  ({_N_WORKERS} workers x "
                       f"{P['nStart']} MC)")
                 print(f"{'='*60}")
 
@@ -225,7 +230,7 @@ def run_regular(func_group: str = "all") -> None:
                 print(f"  [{obj_name}] all {P['nStart']} MC done in "
                       f"{elapsed_func:.1f}s")
 
-                # ── merge & export ───────────────────────────────────
+                # -- merge & export -----------------------------------
                 f0_val = f0_vals[-1] if f0_vals else np.nan
 
                 # Rebuild prm for summary (need obj metadata)
@@ -253,12 +258,14 @@ def run_regular(func_group: str = "all") -> None:
                 })
 
                 log_merged = merge_logs(logs_each, P["useWorst"],
-                                         f0_val, prm["f_opt"])
+                                         f0_val, prm["f_opt"], use_median=True)
                 all_logs[obj_name] = log_merged
+                all_individual[obj_name] = logs_each
 
                 with open(os.path.join(cache_dir, f"{obj_name}.pkl"),
                           "wb") as fh:
-                    pickle.dump(log_merged, fh,
+                    pickle.dump({"merged": log_merged,
+                                 "individual": logs_each}, fh,
                                 protocol=pickle.HIGHEST_PROTOCOL)
 
                 if P["showPlots"]:
@@ -287,7 +294,7 @@ def run_regular(func_group: str = "all") -> None:
             else:
                 os.environ.pop(k, None)
 
-    # ── multi-objective paper figures ─────────────────────────────────────────
+    # -- multi-objective paper figures -----------------------------------------
     if P["showPlots"] and len(all_logs) > 1:
         for x_key, y_key in [
             ("steps",    "combo"),
@@ -304,9 +311,14 @@ def run_regular(func_group: str = "all") -> None:
                                "semilogy", results_dir)
 
         fig_perf_profiles_tol_panel(all_logs, alg_bank, results_dir,
-                                    tol_levels=[1e-3, 1e-6, 1e-9])
+                                    tol_levels=[1e-3, 1e-6, 1e-9],
+                                    all_individual=all_individual)
 
         fig_perf_profiles_comm_panel(all_logs, alg_bank, results_dir,
-                                     tol_levels=[1e-3, 1e-6, 1e-9])
+                                     tol_levels=[1e-3, 1e-6, 1e-9],
+                                     all_individual=all_individual)
 
     print("\n[run_regular] All done.")
+
+
+

@@ -1,10 +1,9 @@
 """
-replot.py  –  Regenerate figures from cached data (no experiments run).
+replot.py  -  Regenerate figures from cached data (no experiments run).
 
 Usage:  python3 replot.py
 """
 import os, sys, pickle, csv
-import numpy as np
 
 
 class _NumpyCompat(pickle.Unpickler):
@@ -14,7 +13,7 @@ class _NumpyCompat(pickle.Unpickler):
             module = module.replace("numpy._core", "numpy.core")
         return super().find_class(module, name)
 
-_root = os.path.dirname(os.path.abspath(__file__))
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _root)
 
 from utils.alg.alg_bank import get_alg_bank
@@ -37,12 +36,20 @@ def replot_regular():
         return
 
     all_logs = {}
+    all_individual = {}
     for fname in sorted(os.listdir(cache_dir)):
         if not fname.endswith(".pkl"):
             continue
         obj_name = fname[:-4]
         with open(os.path.join(cache_dir, fname), "rb") as fh:
-            all_logs[obj_name] = _NumpyCompat(fh).load()
+            payload = _NumpyCompat(fh).load()
+        if (isinstance(payload, dict)
+                and "merged" in payload
+                and "individual" in payload):
+            all_logs[obj_name] = payload["merged"]
+            all_individual[obj_name] = payload["individual"]
+        else:
+            all_logs[obj_name] = payload
         print(f"  Loaded {obj_name}")
 
     if not all_logs:
@@ -64,17 +71,19 @@ def replot_regular():
         fig_plot_multiobj_custom(all_logs, alg_bank, x_key, y_key,
                                  "semilogy", results_dir, n_cols=3)
 
-    print("  Plotting repr_steps_vs_relF (2×2 main-text figure) ...")
+    print("  Plotting repr_steps_vs_relF (2x2 main-text figure) ...")
     fig_plot_multiobj_repr(all_logs, alg_bank, "steps", "relF",
                            "semilogy", results_dir)
 
     print("  Plotting performance profiles (iteration) ...")
     fig_perf_profiles_tol_panel(all_logs, alg_bank, results_dir,
-                                tol_levels=[1e-3, 1e-6, 1e-9])
+                                tol_levels=[1e-3, 1e-6, 1e-9],
+                                all_individual=all_individual)
 
     print("  Plotting performance profiles (comm) ...")
     fig_perf_profiles_comm_panel(all_logs, alg_bank, results_dir,
-                                 tol_levels=[1e-3, 1e-6, 1e-9])
+                                 tol_levels=[1e-3, 1e-6, 1e-9],
+                                 all_individual=all_individual)
 
     print("[done] Regular figures regenerated.\n")
 

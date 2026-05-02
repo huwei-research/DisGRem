@@ -1,12 +1,12 @@
 """
-run_ada.py – Adaptive-mechanism study for AdaDisGrem.
+run_ada.py -Adaptive-mechanism study for AdaDisGrem.
 
 Three experiments on 4 representative functions:
 
-  1. M trajectory  – plot M(t) for AdaDisGrem / CeAdaDisGrem vs DisGrem's fixed M.
-  2. Ada vs Fixed-M  – compare relF convergence of Ada (auto M) against DisGrem
-     run at 5 manually-chosen fixed M values → shows Ada eliminates manual tuning.
-  3. Initial-M robustness  – run Ada from 5 different initial M values and show
+  1. M trajectory  -plot M(t) for AdaDisGrem / CeAdaDisGrem vs DisGrem's fixed M.
+  2. Ada vs Fixed-M  -compare relF convergence of Ada (auto M) against DisGrem
+     run at 5 manually-chosen fixed M values 鈫?shows Ada eliminates manual tuning.
+  3. Initial-M robustness  -run Ada from 5 different initial M values and show
      that M trajectories converge to a similar operating point.
 
 Functions: ridge, logsumexp, logreg_real, logreg_ncvr
@@ -34,18 +34,15 @@ from utils.export.plot_utils import (fig_ada_m_trajectory,
                                       fig_ada_init_m_robust)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 _ADA_FUNCS = ["ridge", "logsumexp", "logreg_real", "logreg_ncvr"]
-_NSTART    = 5
+_NSTART    = int(os.environ.get("LOG_SCHEDULE_NSTART", "5"))
 
 _FIXED_M_FACTORS = [0.1, 0.3, 1.0, 3.0, 10.0]
 _INIT_M_FACTORS  = [0.1, 0.5, 1.0, 3.0, 10.0]
 _N_WORKERS = min(8, max(1, (os.cpu_count() or 4) - 2))
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Helpers
-# ═════════════════════════════════════════════════════════════════════════════
 
 def _make_prm(P, policy, fun_list, d, L_vec,
               x_opt_list, f_opt_list, fname, fparam, W):
@@ -148,12 +145,10 @@ def _average_outs(results_list, nstart):
     return avg
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  Experiment 1 – M trajectory (parallelized)
-# ═════════════════════════════════════════════════════════════════════════════
+#  Experiment 1 -M trajectory (parallelized)
 
 def _exp1_trajectory(results_dir, P, param_bank, M_alpha_policy, x0_generator):
-    print("\n  Exp 1 – M trajectory (DisGrem / AdaDisGrem / CeAdaDisGrem)")
+    print("\n  Exp 1 -M trajectory (DisGrem / AdaDisGrem / CeAdaDisGrem)")
     alg_list = ["DisGrem", "AdaDisGrem", "CeAdaDisGrem"]
 
     tasks = []
@@ -183,13 +178,11 @@ def _exp1_trajectory(results_dir, P, param_bank, M_alpha_policy, x0_generator):
     return logs
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  Experiment 2 – Ada vs Fixed-M (parallelized)
-# ═════════════════════════════════════════════════════════════════════════════
+#  Experiment 2 -Ada vs Fixed-M (parallelized)
 
 def _exp2_fixed_m(results_dir, P, param_bank, M_alpha_policy, x0_generator,
                    ada_logs_from_exp1):
-    print("\n  Exp 2 – Ada vs Fixed-M DisGrem")
+    print("\n  Exp 2 -Ada vs Fixed-M DisGrem")
 
     tasks = []
     base_M_cache = {}
@@ -236,12 +229,10 @@ def _exp2_fixed_m(results_dir, P, param_bank, M_alpha_policy, x0_generator,
                         _ADA_FUNCS, results_dir)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  Experiment 3 – Initial-M robustness (parallelized)
-# ═════════════════════════════════════════════════════════════════════════════
+#  Experiment 3 -Initial-M robustness (parallelized)
 
 def _exp3_init_m(results_dir, P, param_bank, M_alpha_policy, x0_generator):
-    print("\n  Exp 3 – Initial-M robustness")
+    print("\n  Exp 3 -Initial-M robustness")
 
     tasks = []
     base_M_cache = {}
@@ -285,9 +276,7 @@ def _exp3_init_m(results_dir, P, param_bank, M_alpha_policy, x0_generator):
                            _ADA_FUNCS, results_dir)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 #  Entry point
-# ═════════════════════════════════════════════════════════════════════════════
 
 def run_ada() -> None:
     """Run the full adaptive-mechanism study (3 experiments)."""
@@ -296,9 +285,9 @@ def run_ada() -> None:
     os.makedirs(os.path.join(results_dir, "paper", "ada_mechanism"), exist_ok=True)
 
     P = {
-        "Nagent": 10, "p_edge": 0.5, "maxIt": 500,
+        "Nagent": 10, "p_edge": 0.5, "maxIt": int(os.environ.get("LOG_SCHEDULE_MAXIT", "500")),
         "tol": 1e-12, "tolType": "combo",
-        "verbose": False, "NC": 3, "info": 2,
+        "verbose": False, "NC": 3, "NC_schedule": "log", "log_p": 3.0, "log_c_mix": 2.0, "NC_max": 10, "info": 2,
         "countComm": True, "d_override": 30,
     }
     param_bank, M_alpha_policy, x0_generator = init_policy("regular")
@@ -319,3 +308,5 @@ def run_ada() -> None:
     _exp3_init_m(results_dir, P, param_bank, M_alpha_policy, x0_generator)
 
     print("\n[run_ada] All done.")
+
+

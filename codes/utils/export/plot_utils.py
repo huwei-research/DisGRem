@@ -1,10 +1,10 @@
 """
-plot_utils.py – Publication-quality convergence plotting utilities.
+plot_utils.py - Publication-quality convergence plotting utilities.
 
 Design principles (top-conference style):
   - Figures sized for IEEE/ACM double-column (3.5" wide) or full-page (7")
   - Consistent colour palette (Wong 2011 colour-blind safe + extensions)
-  - LaTeX rendering via text.usetex with Computer Modern fonts
+  - Matplotlib mathtext rendering with embedded DejaVu fonts
   - Line widths and marker sizes optimised for print and screen
   - All axes: log y-scale, grid on, clean tick formatting
   - Tight layout with appropriate margins
@@ -49,14 +49,14 @@ def _latex_available() -> bool:
         return False
     return True
 
-_USE_USETEX = _latex_available()
+_USE_USETEX = False
 
 # ── Global rcParams for publication quality ────────────────────────────────
 _RC = {
     "text.usetex":         _USE_USETEX,
     "font.family":         "serif",
     "font.serif":          ["Computer Modern Roman"] if _USE_USETEX else ["DejaVu Serif"],
-    "mathtext.fontset":    "cm",
+    "mathtext.fontset":    "dejavuserif",
     "font.size":           9,
     "axes.titlesize":      9,
     "axes.labelsize":      9,
@@ -93,8 +93,8 @@ _CELL_H = 1.8     # standard cell height for sub-panels (compact)
 
 # Y-axis labels for known metric keys
 _YLABEL = {
-    "combo":    r"combo = $\|g\|$ + cons",
-    "relf":     r"relF = $|F-F^*|/|F_0-F^*|$",
+    "combo":    r"$\mathrm{combo}_k$",
+    "relf":     r"$\mathrm{relF}$",
     "relx":     r"relX = $\|x-x^*\|/\|x_0-x^*\|$",
     "gradnrm":  r"$\|\nabla F\|$",
     "cons":     r"Consensus error",
@@ -108,8 +108,19 @@ _XLABEL = {
     "timecost": "Time (s)",
 }
 
-# Convergence floor – stop drawing once below this value
+# Convergence floor - stop drawing once below this value
 _FLOOR = 1e-13
+
+
+def _running_min(arr):
+    """Return a monotone non-increasing envelope of *arr*."""
+    out = np.asarray(arr, dtype=float).copy()
+    best = np.inf
+    for i in range(len(out)):
+        if np.isfinite(out[i]):
+            best = min(best, out[i])
+            out[i] = best
+    return out
 
 
 def _rc():
@@ -211,7 +222,7 @@ def _add_rate_reference(ax) -> None:
 def _save(fig, path_base: str, exts=("pdf", "png")):
     for ext in exts:
         p = f"{path_base}.{ext}"
-        kw = {"dpi": 600} if ext == "png" else {}
+        kw = {"dpi": 600, "bbox_inches": "tight"} if ext == "png" else {"bbox_inches": "tight"}
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -342,9 +353,9 @@ def fig_plot_multiobj_custom(all_logs: dict, alg_bank: list,
     """
     Multi-objective tiled figure (one panel per function).
 
-    n_cols=3 (default) produces a clean 3×3 grid for 9 standard objectives —
+    n_cols=3 (default) produces a clean 3x3 grid for 9 standard objectives -
     suitable for direct inclusion in a paper.  Diverged algorithms are shown as
-    a '×' legend entry only (no curve drawn).
+    a 'x' legend entry only (no curve drawn).
     Saves to results_dir/paper/convergence_grid/.
     """
     fig_dir = os.path.join(results_dir, "paper", "convergence_grid")
@@ -386,7 +397,7 @@ def fig_plot_multiobj_custom(all_logs: dict, alg_bank: list,
                 lw = _LW_OURS if alg_name in groups["ours"] else _LW_BASELINE
 
                 if is_failed:
-                    # Diverged: legend-only marker (×), no curve drawn
+                    # Diverged: legend-only marker (x), no curve drawn
                     failed_label = label + r" $\times$"
                     if failed_label not in labels_global:
                         h, = ax.plot([], [], color=(0.65, 0.65, 0.65),
@@ -409,7 +420,7 @@ def fig_plot_multiobj_custom(all_logs: dict, alg_bank: list,
                 h, = ax.plot(x, y, color=color, linestyle=ls, linewidth=lw, label=label,
                              alpha=0.92, zorder=zo, **mk)
 
-                # Shaded band (25th–75th percentile) when multiple runs are available
+                # Shaded band (25th-75th percentile) when multiple runs are available
                 y_q25 = _get_field(L, y_key + "_q25")
                 y_q75 = _get_field(L, y_key + "_q75")
                 if y_q25 is not None and y_q75 is not None:
@@ -461,10 +472,10 @@ def fig_plot_multiobj_repr(all_logs: dict, alg_bank: list,
                            results_dir: str,
                            repr_funcs: list = None) -> None:
     """
-    Representative-function 2×2 panel for main text.
+    Representative-function 2x2 panel for main text.
 
     Same style as fig_plot_multiobj_custom but only shows a subset of
-    functions in a compact 2×2 layout.
+    functions in a compact 2x2 layout.
     Saves to results_dir/paper/convergence_grid/repr_{x_key}_vs_{y_key}.
     """
     if repr_funcs is None:
@@ -621,8 +632,8 @@ def fig_plot_robust_summary(robust_data: dict, obj_name: str,
                              results_dir: str) -> None:
     """
     Dual-panel bar chart:
-      Left  – Success rate (%) per algorithm
-      Right – Box plot of steps-to-convergence (successful runs only)
+      Left  - Success rate (%) per algorithm
+      Right - Box plot of steps-to-convergence (successful runs only)
 
     Parameters
     ----------
@@ -654,7 +665,7 @@ def fig_plot_robust_summary(robust_data: dict, obj_name: str,
         ax1.set_xticklabels(labels, rotation=40, ha="right", fontsize=7)
         ax1.set_ylim(0, 105)
         ax1.set_ylabel("Success rate (%)")
-        ax1.set_title(_clean_title(obj_name) + " – robustness", pad=_TITLE_PAD)
+        ax1.set_title(_clean_title(obj_name) + " - robustness", pad=_TITLE_PAD)
         ax1.grid(axis="y", ls="--", alpha=0.4)
         ax1.axhline(100, color="0.6", ls=":", lw=0.8)
         for bar, val in zip(bars, sr_vals):
@@ -742,7 +753,7 @@ def fig_plot_robust_heatmap(all_robust: dict, results_dir: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Multi-scenario × multi-function robust panel
+#  Multi-scenario x multi-function robust panel
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Per-objective colour palettes (each function gets its own hue family)
@@ -961,10 +972,10 @@ def fig_plot_performance_profile(perf_matrix: dict, metric_label: str,
                                   results_dir: str,
                                   title_suffix: str = "") -> None:
     """
-    Dolan–Moré performance profile.
+    Dolan-Moré performance profile.
 
     For each algorithm a and problem p let r_{a,p} = t_{a,p} / min_a t_{a,p}.
-    The performance profile is  ρ_a(τ) = (1/|P|) |{p : r_{a,p} ≤ τ}|.
+    The performance profile is  rho_a(tau) = (1/|P|) |{p : r_{a,p} <= tau}|.
 
     Parameters
     ----------
@@ -975,7 +986,7 @@ def fig_plot_performance_profile(perf_matrix: dict, metric_label: str,
     results_dir  : output directory
     title_suffix : appended to figure title (e.g. objective name)
     """
-    fig_dir = os.path.join(results_dir, "supplement", "perf_profile_legacy")
+    fig_dir = os.path.join(results_dir, "supplement", "perf_profile_single")
     os.makedirs(fig_dir, exist_ok=True)
 
     alg_names = list(perf_matrix.keys())
@@ -1023,8 +1034,8 @@ def fig_plot_performance_profile(perf_matrix: dict, metric_label: str,
             ax.step(tau, rho, color=color, linestyle=ls, linewidth=lw,
                     label=label, where="post", zorder=zorder, alpha=0.92)
 
-        ax.set_xlabel(r"$\tau$  (performance ratio)")
-        ax.set_ylabel(r"$\rho(\tau)$ — fraction of problems")
+        ax.set_xlabel("Performance ratio")
+        ax.set_ylabel("Fraction solved")
         title = f"Performance profile ({metric_label})" if metric_label else "Performance profile"
         if title_suffix:
             title += f"\n{title_suffix}"
@@ -1047,18 +1058,31 @@ def fig_plot_performance_profile(perf_matrix: dict, metric_label: str,
 #  Tolerance-based Performance / Data Profile Panel
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _infer_dim(obj_log: dict, fallback: int = 30) -> int:
+    """Infer problem dimension from xBar shape in any algorithm's merged log."""
+    for v in obj_log.values():
+        if not isinstance(v, dict):
+            continue
+        xb = v.get("xBar")
+        if xb is not None:
+            xb = np.asarray(xb)
+            if xb.ndim == 2 and xb.shape[1] > 0:
+                return int(xb.shape[1])
+    return fallback
+
+
 def fig_perf_profiles_tol_panel(all_logs: dict, alg_bank: list,
                                  results_dir: str,
-                                 tol_levels: list = None) -> None:
+                                 tol_levels: list = None,
+                                 all_individual: dict = None) -> None:
     """
-    6-panel figure (2 rows × 3 columns):
-      Row 0 – Performance Profiles: ρ_a(τ) vs τ (ratio), one per tol
-      Row 1 – Data Profiles:        d_a(κ) vs κ (absolute steps), one per tol
+    6-panel figure (2 rows x 3 columns):
+      Row 0 -- Performance profiles (Dolan-More)
+      Row 1 -- Data profiles (More-Wild, simplex-gradient normalised)
 
-    Both rows use **steps** as the base metric.
-    Criterion: relF < tol  (relative function-value gap).
-
-    Saved to  results_dir/paper/perf_profiles/perf_profiles_panel.{pdf,png}.
+    When *all_individual* is supplied (``{obj: [run0, run1, ...]}``, each
+    run a ``{alg: log_dict}``), every (objective, MC-run) pair becomes a
+    separate problem instance, giving much smoother step curves.
     """
     if tol_levels is None:
         tol_levels = [1e-3, 1e-6, 1e-9]
@@ -1067,35 +1091,65 @@ def fig_perf_profiles_tol_panel(all_logs: dict, alg_bank: list,
     os.makedirs(fig_dir, exist_ok=True)
 
     alg_names = [an for an, _ in alg_bank]
-    obj_names  = list(all_logs.keys())
-    n_p = len(obj_names)
-    if n_p == 0 or not alg_names:
+    obj_names = list(all_logs.keys())
+    if not obj_names or not alg_names:
         return
 
     groups = get_alg_groups()
 
+    use_individual = (all_individual is not None
+                      and len(all_individual) > 0)
+
+    if use_individual:
+        instance_ids = []
+        instance_dims = []
+        for on in obj_names:
+            dim = _infer_dim(all_logs[on])
+            runs = all_individual.get(on, [])
+            for ri in range(len(runs)):
+                instance_ids.append((on, ri))
+                instance_dims.append(dim)
+        n_p = len(instance_ids)
+    else:
+        n_p = len(obj_names)
+        instance_dims = [_infer_dim(all_logs[on]) for on in obj_names]
+
+    if n_p == 0:
+        return
+
     def _first_hit_steps(log, tol):
-        """Return first step at which relF < tol, or NaN."""
         relF_arr = np.asarray(log.get("relF", []), dtype=float)
         if len(relF_arr) == 0:
             return np.nan
         hit = np.where(relF_arr < tol)[0]
-        if len(hit) == 0:
-            return np.nan
-        return float(hit[0] + 1)
+        return float(hit[0] + 1) if len(hit) else np.nan
 
     def _build_matrix(tol):
         T = np.full((len(alg_names), n_p), np.nan)
-        for ai, an in enumerate(alg_names):
-            for pi, on in enumerate(obj_names):
-                lg = all_logs[on].get(an, {})
-                if lg.get("__failed__"):
-                    continue
-                T[ai, pi] = _first_hit_steps(lg, tol)
+        if use_individual:
+            for ai, an in enumerate(alg_names):
+                for pi, (on, ri) in enumerate(instance_ids):
+                    lg = all_individual[on][ri].get(an, {})
+                    if lg.get("__failed__"):
+                        continue
+                    T[ai, pi] = _first_hit_steps(lg, tol)
+        else:
+            for ai, an in enumerate(alg_names):
+                for pi, on in enumerate(obj_names):
+                    lg = all_logs[on].get(an, {})
+                    if lg.get("__failed__"):
+                        continue
+                    T[ai, pi] = _first_hit_steps(lg, tol)
         return T
 
+    def _build_matrix_mw(tol):
+        T_raw = _build_matrix(tol)
+        for pi in range(n_p):
+            T_raw[:, pi] /= (instance_dims[pi] + 1)
+        return T_raw
+
     def _plot_perf_profile(ax, T, title_str):
-        """Dolan-Moré performance profile: x = ratio τ, y = fraction solved."""
+        n_inst = T.shape[1]
         with np.errstate(all="ignore"):
             t_best = np.nanmin(T, axis=0)
             t_best[t_best <= 0] = np.nan
@@ -1111,15 +1165,15 @@ def fig_perf_profiles_tol_panel(all_logs: dict, alg_bank: list,
         ax.set_xlim(1.0, tau_max)
         ax.set_ylim(-0.02, 1.05)
         ax.grid(True, which="both", ls="--", alpha=_GRID_ALPHA)
-        ax.set_xlabel(r"$\tau$  (performance ratio)", fontsize=7.5)
-        ax.set_ylabel(r"$\rho(\tau)$", fontsize=7.5)
+        ax.set_xlabel("Performance ratio", fontsize=7.5)
+        ax.set_ylabel("Fraction solved", fontsize=7.5)
         ax.set_title(title_str, pad=_TITLE_PAD, fontsize=8)
 
         for ai, an in enumerate(alg_names):
-            r_a   = R[ai, :]
+            r_a = R[ai, :]
             valid = r_a[np.isfinite(r_a)]
-            rho   = np.array([float(np.sum(valid <= t)) / float(n_p)
-                              for t in tau])
+            rho = np.array([float(np.sum(valid <= t)) / float(n_inst)
+                            for t in tau])
             label, color, ls = get_alg_style(an)
             lw = _LW_OURS if an in groups["ours"] else _LW_BASELINE
             zo = 3 if an in groups["ours"] else 2
@@ -1127,7 +1181,7 @@ def fig_perf_profiles_tol_panel(all_logs: dict, alg_bank: list,
                     label=label, where="post", zorder=zo, alpha=0.92)
 
     def _plot_data_profile(ax, T, title_str):
-        """Data profile (Moré-Wild): x = absolute steps κ, y = fraction solved."""
+        n_inst = T.shape[1]
         finite = T[np.isfinite(T)]
         if len(finite) == 0:
             ax.set_visible(False)
@@ -1138,13 +1192,14 @@ def fig_perf_profiles_tol_panel(all_logs: dict, alg_bank: list,
         ax.set_xlim(0, kappa_max)
         ax.set_ylim(-0.02, 1.05)
         ax.grid(True, which="both", ls="--", alpha=_GRID_ALPHA)
-        ax.set_xlabel(r"$\kappa$  (iterations)", fontsize=7.5)
-        ax.set_ylabel(r"$d(\kappa)$", fontsize=7.5)
+        ax.set_xlabel("Normalized budget", fontsize=7.5)
+        ax.set_ylabel("Fraction solved", fontsize=7.5)
         ax.set_title(title_str, pad=_TITLE_PAD, fontsize=8)
 
         for ai, an in enumerate(alg_names):
             t_a = T[ai, :]
-            rho = np.array([float(np.sum(t_a[np.isfinite(t_a)] <= k)) / float(n_p)
+            rho = np.array([float(np.sum(t_a[np.isfinite(t_a)] <= k))
+                            / float(n_inst)
                             for k in kappa])
             label, color, ls = get_alg_style(an)
             lw = _LW_OURS if an in groups["ours"] else _LW_BASELINE
@@ -1155,30 +1210,20 @@ def fig_perf_profiles_tol_panel(all_logs: dict, alg_bank: list,
     n_tol = len(tol_levels)
     with _rc():
         fig, axes = plt.subplots(2, n_tol,
-                                 figsize=(_COL2_W, 4.0),
-                                 gridspec_kw={"hspace": 0.55, "wspace": 0.35})
-
-        handles_global, labels_global = [], []
+                                 figsize=(_COL2_W, 4.8),
+                                 gridspec_kw={"hspace": 0.60, "wspace": 0.38})
 
         for ci, tol in enumerate(tol_levels):
-            tol_str = f"$\\epsilon={tol:.0e}$"
-            T = _build_matrix(tol)
+            tol_str = rf"$\varepsilon={tol:.0e}$"
+            T_raw = _build_matrix(tol)
+            T_mw  = _build_matrix_mw(tol)
 
-            _plot_perf_profile(axes[0, ci], T,
-                               f"Performance profile\n{tol_str}")
+            _plot_perf_profile(axes[0, ci], T_raw,
+                               f"Performance profile  {tol_str}")
+            _plot_data_profile(axes[1, ci], T_mw,
+                               f"Data profile  {tol_str}")
 
-            _plot_data_profile(axes[1, ci], T,
-                               f"Data profile\n{tol_str}")
-
-        axes[0, 0].annotate("Performance\nProfile",
-                             xy=(-0.28, 0.5), xycoords="axes fraction",
-                             fontsize=8, ha="center", va="center",
-                             rotation=90)
-        axes[1, 0].annotate("Data Profile",
-                             xy=(-0.28, 0.5), xycoords="axes fraction",
-                             fontsize=8, ha="center", va="center",
-                             rotation=90)
-
+        handles_global, labels_global = [], []
         for row_axes in axes:
             for ax in row_axes:
                 for h in ax.get_lines():
@@ -1188,18 +1233,17 @@ def fig_perf_profiles_tol_panel(all_logs: dict, alg_bank: list,
                         labels_global.append(lbl)
 
         if handles_global:
-            n_h = len(handles_global)
             fig.legend(handles_global, labels_global,
                        loc="lower center",
-                       ncol=min(n_h, 6),
-                       bbox_to_anchor=(0.5, 0.0),
+                       ncol=min(len(handles_global), 5),
+                       bbox_to_anchor=(0.5, -0.08),
                        frameon=True,
                        handlelength=_LEG_HLEN,
                        columnspacing=_LEG_COLSPC,
                        labelspacing=0.25,
                        fontsize=_LEG_FONT)
 
-        plt.tight_layout(rect=[0, 0.07, 1, 1], pad=0.4)
+        plt.tight_layout(rect=[0, 0.13, 1, 1], pad=0.4)
         base = os.path.join(fig_dir, "perf_profiles_panel")
         _save(fig, base)
         plt.close(fig)
@@ -1207,11 +1251,14 @@ def fig_perf_profiles_tol_panel(all_logs: dict, alg_bank: list,
 
 def fig_perf_profiles_comm_panel(all_logs: dict, alg_bank: list,
                                   results_dir: str,
-                                  tol_levels: list = None) -> None:
+                                  tol_levels: list = None,
+                                  all_individual: dict = None) -> None:
     """
-    6-panel figure (2 rows × 3 columns) using **commCost (MB)** as metric:
-      Row 0 – Performance Profiles: ρ_a(τ) vs τ (comm-cost ratio)
-      Row 1 – Data Profiles:        d_a(κ) vs κ (absolute comm MB)
+    6-panel figure (2 rows x 3 columns) using **commCost (MB)** as metric:
+      Row 0 -- Performance profiles (Dolan-More):
+               rho_s(tau) vs tau (comm-cost ratio)
+      Row 1 -- Data profiles:
+               d_s(kappa) vs kappa (comm cost in MB)
 
     Criterion: relF < tol.
     Saved to  results_dir/paper/perf_profiles/perf_profiles_comm_panel.{pdf,png}.
@@ -1224,11 +1271,25 @@ def fig_perf_profiles_comm_panel(all_logs: dict, alg_bank: list,
 
     alg_names = [an for an, _ in alg_bank]
     obj_names = list(all_logs.keys())
-    n_p = len(obj_names)
-    if n_p == 0 or not alg_names:
+    if not obj_names or not alg_names:
         return
 
     groups = get_alg_groups()
+
+    use_individual = (all_individual is not None
+                      and len(all_individual) > 0)
+    if use_individual:
+        instance_ids = []
+        for on in obj_names:
+            runs = all_individual.get(on, [])
+            for ri in range(len(runs)):
+                instance_ids.append((on, ri))
+        n_p = len(instance_ids)
+    else:
+        n_p = len(obj_names)
+
+    if n_p == 0:
+        return
 
     def _first_hit_comm(log, tol):
         """Return cumulative commCost (MB) at first step where relF < tol, or NaN."""
@@ -1244,15 +1305,24 @@ def fig_perf_profiles_comm_panel(all_logs: dict, alg_bank: list,
 
     def _build_matrix(tol):
         T = np.full((len(alg_names), n_p), np.nan)
-        for ai, an in enumerate(alg_names):
-            for pi, on in enumerate(obj_names):
-                lg = all_logs[on].get(an, {})
-                if lg.get("__failed__"):
-                    continue
-                T[ai, pi] = _first_hit_comm(lg, tol)
+        if use_individual:
+            for ai, an in enumerate(alg_names):
+                for pi, (on, ri) in enumerate(instance_ids):
+                    lg = all_individual[on][ri].get(an, {})
+                    if lg.get("__failed__"):
+                        continue
+                    T[ai, pi] = _first_hit_comm(lg, tol)
+        else:
+            for ai, an in enumerate(alg_names):
+                for pi, on in enumerate(obj_names):
+                    lg = all_logs[on].get(an, {})
+                    if lg.get("__failed__"):
+                        continue
+                    T[ai, pi] = _first_hit_comm(lg, tol)
         return T
 
     def _plot_perf_profile(ax, T, title_str):
+        n_inst = T.shape[1]
         with np.errstate(all="ignore"):
             t_best = np.nanmin(T, axis=0)
             t_best[t_best <= 0] = np.nan
@@ -1268,14 +1338,14 @@ def fig_perf_profiles_comm_panel(all_logs: dict, alg_bank: list,
         ax.set_xlim(1.0, tau_max)
         ax.set_ylim(-0.02, 1.05)
         ax.grid(True, which="both", ls="--", alpha=_GRID_ALPHA)
-        ax.set_xlabel(r"$\tau$  (comm-cost ratio)", fontsize=7.5)
-        ax.set_ylabel(r"$\rho(\tau)$", fontsize=7.5)
+        ax.set_xlabel("Communication ratio", fontsize=7.5)
+        ax.set_ylabel("Fraction solved", fontsize=7.5)
         ax.set_title(title_str, pad=_TITLE_PAD, fontsize=8)
 
         for ai, an in enumerate(alg_names):
             r_a   = R[ai, :]
             valid = r_a[np.isfinite(r_a)]
-            rho   = np.array([float(np.sum(valid <= t)) / float(n_p)
+            rho   = np.array([float(np.sum(valid <= t)) / float(n_inst)
                               for t in tau])
             label, color, ls = get_alg_style(an)
             lw = _LW_OURS if an in groups["ours"] else _LW_BASELINE
@@ -1284,6 +1354,7 @@ def fig_perf_profiles_comm_panel(all_logs: dict, alg_bank: list,
                     label=label, where="post", zorder=zo, alpha=0.92)
 
     def _plot_data_profile(ax, T, title_str):
+        n_inst = T.shape[1]
         finite = T[np.isfinite(T)]
         if len(finite) == 0:
             ax.set_visible(False)
@@ -1294,13 +1365,13 @@ def fig_perf_profiles_comm_panel(all_logs: dict, alg_bank: list,
         ax.set_xlim(0, kappa_max)
         ax.set_ylim(-0.02, 1.05)
         ax.grid(True, which="both", ls="--", alpha=_GRID_ALPHA)
-        ax.set_xlabel(r"$\kappa$  (comm cost, MB)", fontsize=7.5)
-        ax.set_ylabel(r"$d(\kappa)$", fontsize=7.5)
+        ax.set_xlabel("Communication budget (MB)", fontsize=7.5)
+        ax.set_ylabel("Fraction solved", fontsize=7.5)
         ax.set_title(title_str, pad=_TITLE_PAD, fontsize=8)
 
         for ai, an in enumerate(alg_names):
             t_a = T[ai, :]
-            rho = np.array([float(np.sum(t_a[np.isfinite(t_a)] <= k)) / float(n_p)
+            rho = np.array([float(np.sum(t_a[np.isfinite(t_a)] <= k)) / float(n_inst)
                             for k in kappa])
             label, color, ls = get_alg_style(an)
             lw = _LW_OURS if an in groups["ours"] else _LW_BASELINE
@@ -1311,29 +1382,20 @@ def fig_perf_profiles_comm_panel(all_logs: dict, alg_bank: list,
     n_tol = len(tol_levels)
     with _rc():
         fig, axes = plt.subplots(2, n_tol,
-                                 figsize=(_COL2_W, 4.0),
-                                 gridspec_kw={"hspace": 0.55, "wspace": 0.35})
+                                 figsize=(_COL2_W, 4.8),
+                                 gridspec_kw={"hspace": 0.60, "wspace": 0.38})
 
         handles_global, labels_global = [], []
 
         for ci, tol in enumerate(tol_levels):
-            tol_str = f"$\\epsilon={tol:.0e}$"
+            tol_str = rf"$\varepsilon={tol:.0e}$"
             T = _build_matrix(tol)
 
             _plot_perf_profile(axes[0, ci], T,
-                               f"Perf.\\ profile (comm)\n{tol_str}")
+                               f"Perf. profile (comm)  {tol_str}")
 
             _plot_data_profile(axes[1, ci], T,
-                               f"Data profile (comm)\n{tol_str}")
-
-        axes[0, 0].annotate("Performance\nProfile\n(comm)",
-                             xy=(-0.28, 0.5), xycoords="axes fraction",
-                             fontsize=8, ha="center", va="center",
-                             rotation=90)
-        axes[1, 0].annotate("Data Profile\n(comm)",
-                             xy=(-0.28, 0.5), xycoords="axes fraction",
-                             fontsize=8, ha="center", va="center",
-                             rotation=90)
+                               f"Data profile (comm)  {tol_str}")
 
         for row_axes in axes:
             for ax in row_axes:
@@ -1344,18 +1406,17 @@ def fig_perf_profiles_comm_panel(all_logs: dict, alg_bank: list,
                         labels_global.append(lbl)
 
         if handles_global:
-            n_h = len(handles_global)
             fig.legend(handles_global, labels_global,
                        loc="lower center",
-                       ncol=min(n_h, 6),
-                       bbox_to_anchor=(0.5, 0.0),
+                       ncol=min(len(handles_global), 5),
+                       bbox_to_anchor=(0.5, -0.08),
                        frameon=True,
                        handlelength=_LEG_HLEN,
                        columnspacing=_LEG_COLSPC,
                        labelspacing=0.25,
                        fontsize=_LEG_FONT)
 
-        plt.tight_layout(rect=[0, 0.07, 1, 1], pad=0.4)
+        plt.tight_layout(rect=[0, 0.13, 1, 1], pad=0.4)
         base = os.path.join(fig_dir, "perf_profiles_comm_panel")
         _save(fig, base)
         plt.close(fig)
@@ -1617,7 +1678,7 @@ def fig_plot_comm_budget(comm_steps_data: dict,
                           results_dir: str,
                           obj_name: str = "") -> None:
     """
-    Log–log scatter plot of communication cost vs iteration count.
+    Log-log scatter plot of communication cost vs iteration count.
 
     Each algorithm occupies one point; algorithms on or near the Pareto
     frontier (low comm AND low steps) are highlighted with a bold border.
@@ -1697,7 +1758,7 @@ def fig_plot_comm_budget(comm_steps_data: dict,
 
         ax.set_xlabel("Communication cost (MB)")
         ax.set_ylabel("Steps to convergence")
-        t = "Comm–iteration efficiency"
+        t = "Comm-iteration efficiency"
         if obj_name:
             t += f"  [{_clean_title(obj_name)}]"
         ax.set_title(t, pad=_TITLE_PAD)
@@ -1817,7 +1878,7 @@ def fig_plot_convergence_rate(log_merged: dict, alg_bank: list,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  2 × 3 Scalability panel figure
+#  2 x 3 Scalability panel figure
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fig_plot_scalability_panel(data_N: dict, data_d: dict,
@@ -1825,10 +1886,10 @@ def fig_plot_scalability_panel(data_N: dict, data_d: dict,
                                 results_dir: str,
                                 obj_name: str = "ridge") -> None:
     """
-    Publication-quality 2 × 3 panel figure for scalability experiments.
+    Publication-quality 2 x 3 panel figure for scalability experiments.
 
-    Row 0 – vary number of agents N
-    Row 1 – vary problem dimension d
+    Row 0 - vary number of agents N
+    Row 1 - vary problem dimension d
     Columns: steps to convergence | wall-clock time (s) | communication (MB)
 
     Parameters
@@ -1855,8 +1916,8 @@ def fig_plot_scalability_panel(data_N: dict, data_d: dict,
         (data_d, d_vals, r"Dimension  $d$"),
     ]
     row_titles = [
-        f"Scalability in $N$ — {_clean_title(obj_name)}",
-        f"Scalability in $d$ — {_clean_title(obj_name)}",
+        f"Scalability in $N$ - {_clean_title(obj_name)}",
+        f"Scalability in $d$ - {_clean_title(obj_name)}",
     ]
 
     with _rc():
@@ -2039,9 +2100,9 @@ def fig_plot_convergence_trio(log_merged: dict, alg_bank: list,
                                obj_name: str = "") -> None:
     """
     Side-by-side triple panel for one objective:
-      Left  – iterations vs combo
-      Centre – comm cost (MB) vs combo
-      Right  – wall-clock time (s) vs combo
+      Left  - iterations vs combo
+      Centre - comm cost (MB) vs combo
+      Right  - wall-clock time (s) vs combo
 
     Allows direct comparison of three efficiency axes in a single figure.
 
@@ -2075,7 +2136,7 @@ def fig_plot_convergence_trio(log_merged: dict, alg_bank: list,
         for ax, (x_key, x_label) in zip(axes, x_configs):
             _format_ax(ax, "semilogy")
             ax.set_xlabel(x_label, fontsize=8)
-            ax.set_ylabel(r"combo = $\|\nabla F\|$ + cons", fontsize=8)
+            ax.set_ylabel(r"$\mathrm{combo}_k$", fontsize=8)
 
             for alg_name, _ in alg_bank:
                 if alg_name not in log_merged:
@@ -2305,7 +2366,7 @@ def fig_plot_comm_savings(all_logs: dict, alg_bank: list,
                 ratio = ref_val / v
                 if ratio > 1.0:
                     ax.text(v + 0.01 * val_sorted[np.isfinite(val_sorted)].max(),
-                            y_pos[i], f"×{ratio:.1f} savings",
+                            y_pos[i], rf"$\times${ratio:.1f} savings",
                             va="center", ha="left", fontsize=6.5,
                             color="0.30" if a in groups["ours"] else "0.55")
 
@@ -2366,17 +2427,13 @@ def fig_success_rate_table(success_data: dict, alg_names: list,
         fig_h = max(0.38 * n_alg + 1.2, 3.0)
         fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
-        from matplotlib.colors import LinearSegmentedColormap
-        cmap = LinearSegmentedColormap.from_list(
-            "sr", [(0.85, 0.25, 0.20), (1.0, 0.92, 0.60),
-                   (0.30, 0.72, 0.38)], N=256)
-        im = ax.imshow(mat, cmap=cmap, vmin=0, vmax=100, aspect="auto")
+        im = ax.imshow(mat, cmap="viridis", vmin=0, vmax=100, aspect="auto")
 
         for ai in range(n_alg):
             for oi in range(n_obj):
                 val = mat[ai, oi]
                 if np.isfinite(val):
-                    tc = "white" if val < 30 or val > 85 else "black"
+                    tc = "white" if val < 45 else "black"
                     ax.text(oi, ai, f"{val:.0f}",
                             ha="center", va="center",
                             fontsize=7.5, fontweight="bold", color=tc)
@@ -2390,9 +2447,9 @@ def fig_success_rate_table(success_data: dict, alg_names: list,
         ax.set_yticklabels(row_labels, fontsize=7.5)
 
         ax.set_title(
-            f"Success Rate (\\%) — {scenario_name.capitalize()}"
+            f"Success Rate (\\%) - {scenario_name.capitalize()}"
             if _USE_USETEX else
-            f"Success Rate (%) — {scenario_name.capitalize()}",
+            f"Success Rate (%) - {scenario_name.capitalize()}",
             fontsize=9, pad=8)
 
         cbar = fig.colorbar(im, ax=ax, shrink=0.75, pad=0.04)
@@ -2420,7 +2477,7 @@ def fig_param_sweep_gradient(entries: list, group_label: str,
     ----------
     entries : list of dicts, each containing
         alg_name    : str
-        param_label : str  (e.g. 'α' or 'M')
+        param_label : str  (e.g. 'alpha' or 'M')
         factors     : sorted list/array of float multipliers
         curves      : list of (factor, relF_mean_array, is_diverged_bool)
     group_label : figure super-title (e.g. "DisGrem family")
@@ -2457,7 +2514,7 @@ def fig_param_sweep_gradient(entries: list, group_label: str,
 
             _format_ax(ax, "semilogy")
             label_alg = get_alg_style(an)[0]
-            ax.set_title(f"{label_alg} — {pl} sweep",
+            ax.set_title(f"{label_alg} - {pl} sweep",
                          pad=_TITLE_PAD, fontsize=8)
             ax.set_xlabel("Iteration", fontsize=7.5)
             ax.set_ylabel(r"relF", fontsize=7.5)
@@ -2485,7 +2542,7 @@ def fig_param_sweep_gradient(entries: list, group_label: str,
         for si in range(n_sub, n_rows * n_cols):
             axes[si // n_cols, si % n_cols].set_visible(False)
 
-        fig.suptitle(f"{group_label} — {_clean_title(obj_name)}",
+        fig.suptitle(f"{group_label} - {_clean_title(obj_name)}",
                      fontsize=9, y=1.01)
         plt.tight_layout(rect=[0, 0, 0.90, 0.98])
 
@@ -2496,8 +2553,8 @@ def fig_param_sweep_gradient(entries: list, group_label: str,
         sm.set_array([])
         cax = fig.add_axes([0.92, 0.06, 0.02, 0.88])
         cbar = fig.colorbar(sm, cax=cax)
-        mul_sym = r"$\times$default" if _USE_USETEX else "×default"
-        cbar.set_label(f"factor ({mul_sym})", fontsize=7.5)
+        mul_sym = r"$\times$default"
+        cbar.set_label(r"factor ($\times$ default)", fontsize=7.5)
         cbar.ax.tick_params(labelsize=6.5)
 
         safe = group_label.replace(" ", "_").lower()
@@ -2552,7 +2609,7 @@ def fig_param_sweep_combined(all_entries_by_func: dict,
                 _format_ax(ax, "semilogy")
                 label_alg = get_alg_style(an)[0]
                 if row == 0:
-                    ax.set_title(f"{label_alg} — {pl} sweep",
+                    ax.set_title(f"{label_alg} - {pl} sweep",
                                  pad=_TITLE_PAD, fontsize=7.5)
                 if col == 0:
                     ax.set_ylabel(_clean_title(obj_name) + r"  relF",
@@ -2600,8 +2657,8 @@ def fig_param_sweep_combined(all_entries_by_func: dict,
         sm.set_array([])
         cax = fig.add_axes([0.92, 0.06, 0.018, 0.88])
         cbar = fig.colorbar(sm, cax=cax)
-        mul_sym = r"$\times$default" if _USE_USETEX else "×default"
-        cbar.set_label(f"factor ({mul_sym})", fontsize=7)
+        mul_sym = r"$\times$default"
+        cbar.set_label(r"factor ($\times$ default)", fontsize=7)
         cbar.ax.tick_params(labelsize=6)
 
         safe = group_label.replace(" ", "_").lower()
@@ -2684,7 +2741,7 @@ def fig_comm_profile(profile_data: dict, obj_name: str,
                         markersize=3.5, lw=1.3, alpha=0.88,
                         label=f"d={dim}")
 
-                # Mark unreached thresholds with × at right edge
+                # Mark unreached thresholds with x at right edge
                 for ui in np.where(~valid)[0]:
                     ax.plot(tol_exp[ui], ax.get_ylim()[1] * 0.9 if ax.get_ylim()[1] > 0 else 1.0,
                             "x", color=color, markersize=4,
@@ -2696,7 +2753,7 @@ def fig_comm_profile(profile_data: dict, obj_name: str,
         for si in range(n_sub, n_rows * n_cols):
             axes[si // n_cols, si % n_cols].set_visible(False)
 
-        fig.suptitle(f"Comm. Cost Profile — {_clean_title(obj_name)}",
+        fig.suptitle(f"Comm. Cost Profile - {_clean_title(obj_name)}",
                      fontsize=9, y=1.01)
         plt.tight_layout(rect=[0, 0, 1, 0.97])
 
@@ -2766,10 +2823,10 @@ def fig_comm_summary_table(table_data: dict, dims: list,
                         ax.text(ci_idx, ai, txt, ha="center", va="center",
                                 fontsize=6, color=tc)
                     else:
-                        ax.text(ci_idx, ai, "—", ha="center", va="center",
+                        ax.text(ci_idx, ai, "-", ha="center", va="center",
                                 fontsize=6, color="gray")
 
-            # Column labels: (function × tol) pairs
+            # Column labels: (function x tol) pairs
             col_labels = []
             for on in obj_names:
                 for tol in tol_key_levels:
@@ -2782,7 +2839,7 @@ def fig_comm_summary_table(table_data: dict, dims: list,
             ax.set_xticklabels(col_labels, fontsize=5.5, rotation=0, ha="center")
             ax.set_yticks(range(n_alg))
             ax.set_yticklabels(row_labels, fontsize=7)
-            ax.set_title(f"Comm. Cost (MB) — d={dim}", fontsize=9, pad=6)
+            ax.set_title(f"Comm. Cost (MB) - d={dim}", fontsize=9, pad=6)
 
             cbar = fig.colorbar(im, ax=ax, shrink=0.7, pad=0.04)
             cbar.set_label("MB", fontsize=7)
@@ -2795,7 +2852,7 @@ def fig_comm_summary_table(table_data: dict, dims: list,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Communication: Ce benefit (full vs compressed) — Part 1
+#  Communication: Ce benefit (full vs compressed) - Part 1
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fig_ce_benefit(all_data: dict, ce_pairs: list,
@@ -2803,7 +2860,7 @@ def fig_ce_benefit(all_data: dict, ce_pairs: list,
     """
     Precision-vs-communication-cost plot showing Ce savings.
 
-    2×2 grid (one subplot per function).
+    2x2 grid (one subplot per function).
     Each subplot shows one curve per algorithm (full vs Ce variant).
 
     Parameters
@@ -2871,6 +2928,30 @@ def fig_ce_benefit(all_data: dict, ce_pairs: list,
                     handles_global.append(h)
                     labels_global.append(label)
 
+            saving_lines = []
+            for no_ce, with_ce in ce_pairs:
+                full_v = np.asarray(
+                    all_data.get(obj_name, {}).get(no_ce, []), dtype=float)
+                ce_v = np.asarray(
+                    all_data.get(obj_name, {}).get(with_ce, []), dtype=float)
+                K = min(len(full_v), len(ce_v))
+                if K == 0:
+                    continue
+                valid = np.isfinite(full_v[:K]) & np.isfinite(ce_v[:K]) & (full_v[:K] > 0)
+                if not np.any(valid):
+                    continue
+                avg_saving = 100.0 * np.nanmean(1.0 - ce_v[:K][valid] / full_v[:K][valid])
+                _, _, label_ce = no_ce.partition("Ada")
+                tag = "CeAda" if label_ce else "Ce"
+                saving_lines.append(f"{tag}: {avg_saving:.0f}%")
+            if saving_lines:
+                ax.text(0.03, 0.96, "Avg. saving " + ", ".join(saving_lines),
+                        transform=ax.transAxes, ha="left", va="top",
+                        fontsize=6.5,
+                        bbox=dict(boxstyle="round,pad=0.2",
+                                  facecolor="white", edgecolor="0.8",
+                                  alpha=0.85))
+
         for idx in range(n, n_rows * n_cols):
             axes[idx // n_cols, idx % n_cols].set_visible(False)
 
@@ -2911,7 +2992,7 @@ def fig_ce_benefit(all_data: dict, ce_pairs: list,
                     rows.append([obj_name, no_ce, with_ce, f"{tol:.0e}",
                                  f"{fv:.2f}" if np.isfinite(fv) else "NaN",
                                  f"{cv:.2f}" if np.isfinite(cv) else "NaN",
-                                 "—"])
+                                "-"])
 
     import csv
     csv_path = os.path.join(tbl_dir, "ce_savings_table.csv")
@@ -2921,7 +3002,7 @@ def fig_ce_benefit(all_data: dict, ce_pairs: list,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Communication: ablation (Klazy sweep / compression sweep) — Part 2
+#  Communication: ablation (Klazy sweep / compression sweep) - Part 2
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fig_comm_ablation(curves_by_func: dict, obj_names: list,
@@ -2931,7 +3012,7 @@ def fig_comm_ablation(curves_by_func: dict, obj_names: list,
     """
     relF vs commCost gradient curves for ablation studies.
 
-    1×4 (or 2×2 if >4 functions) layout.
+    1x4 (or 2x2 if >4 functions) layout.
 
     Parameters
     ----------
@@ -2979,13 +3060,18 @@ def fig_comm_ablation(curves_by_func: dict, obj_names: list,
                 color = cmap(0.15 + 0.80 * t)
 
                 K = min(len(relF), len(comm))
-                relF_c = np.clip(relF[:K], _FLOOR, None)
+                relF_c = np.clip(_running_min(relF[:K]), _FLOOR, None)
                 comm_c = comm[:K]
                 valid = np.isfinite(relF_c) & np.isfinite(comm_c) & (relF_c > 0)
                 if not np.any(valid):
                     h, = ax.plot([], [], color=color, lw=1.3, label=label)
                 else:
-                    h, = ax.plot(comm_c[valid], relF_c[valid],
+                    x_valid = comm_c[valid]
+                    y_valid = relF_c[valid]
+                    order = np.argsort(x_valid)
+                    x_valid = x_valid[order]
+                    y_valid = _running_min(y_valid[order])
+                    h, = ax.plot(x_valid, y_valid,
                                  color=color, lw=1.4, alpha=0.88, label=label)
                 if label not in labels_global:
                     handles_global.append(h)
@@ -3017,7 +3103,7 @@ def fig_comm_ablation(curves_by_func: dict, obj_names: list,
 def fig_ada_m_trajectory(logs: dict, obj_names: list,
                           results_dir: str) -> None:
     """
-    M-trajectory plot: 2×2 grid (one subplot per function).
+    M-trajectory plot: 2x2 grid (one subplot per function).
 
     Each subplot shows:
       - AdaDisGrem  M(t) trajectory  (solid blue)
@@ -3100,7 +3186,7 @@ def fig_ada_vs_fixed_m(ada_log: dict, fixed_m_logs: dict,
                         m_factors: list, obj_names: list,
                         results_dir: str) -> None:
     """
-    Ada vs Fixed-M convergence comparison: 2×2 grid.
+    Ada vs Fixed-M convergence comparison: 2x2 grid.
 
     Each subplot (one function):
       - Grey gradient curves: DisGrem at each fixed M factor
@@ -3179,7 +3265,7 @@ def fig_ada_init_m_robust(init_m_logs: dict, init_m_factors: list,
     """
     Initial-M robustness: M trajectory from different starting M values.
 
-    2×2 grid; each subplot shows multiple M(t) curves for AdaDisGrem
+    2x2 grid; each subplot shows multiple M(t) curves for AdaDisGrem
     launched with different initial M, demonstrating convergence to
     a similar operating point regardless of initialisation.
 
@@ -3221,7 +3307,7 @@ def fig_ada_init_m_robust(init_m_logs: dict, init_m_factors: list,
                     continue
                 steps = np.arange(1, len(m_arr) + 1)
                 valid = np.isfinite(m_arr)
-                mul_sym = r"$\times$" if _USE_USETEX else "×"
+                mul_sym = r"$\times$"
                 ax.plot(steps[valid], m_arr[valid], color=color,
                         lw=1.3, alpha=0.85,
                         label=f"init M={mf:.2g}{mul_sym}")

@@ -1,5 +1,5 @@
 """
-esom.py – ESOM: Exact Second-Order Method (Mokhtari et al.).
+esom.py - ESOM: Exact Second-Order Method (Mokhtari et al.).
 Ported from MATLAB: ESOM.m
 """
 
@@ -21,12 +21,12 @@ def esom(x0: np.ndarray, prm: dict):
         .chi       inner refinement iters [3]
     """
     p = {
-        "esom_penalty": 1.0,   # ADMM penalty ρ — do NOT confuse with gradient step α
-        # Paper (Mokhtari et al. 2016, dynamic ESOM) defines D_ii = H_i + 2ρ(1-w_ii)I + I.
-        # The "+1" unit regularisation (esom_unit_reg) is NOT a small ε but a structural term
-        # from the ADMM augmented Lagrangian.  Using only epsl≈0 (as before) caused catastrophic
+        "esom_penalty": 1.0,   # ADMM penalty rho - do NOT confuse with gradient step alpha
+        # Paper (Mokhtari et al. 2016, dynamic ESOM) defines D_ii = H_i + 2rho(1-w_ii)I + I.
+        # The "+1" unit regularisation (esom_unit_reg) is NOT a small eps but a structural term
+        # from the ADMM augmented Lagrangian.  Using only epslapprox0 (as before) caused catastrophic
         # divergence on near-flat objectives (e.g. linlog) because D became near-singular.
-        "esom_unit_reg": 1.0,  # the "+I" term from the paper: D = H + 2ρ(1-w_ii)I + unit_reg*I
+        "esom_unit_reg": 1.0,  # the "+I" term from the paper: D = H + 2rho(1-w_ii)I + unit_reg*I
         "epsl": 1e-6, "chi": 3,
         "maxIt": 200, "tol": 1e-8, "tolType": "combo",
         "verbose": True, "countComm": True, "memoryLimitMB": np.inf,
@@ -100,7 +100,7 @@ def esom(x0: np.ndarray, prm: dict):
                            - alpha * nbr_sum)
 
         # (5) D_inv blocks
-        # Paper: D_ii = H_i + 2ρ(1-w_ii)I + I  (the "+I" = unit_reg is structural, not ε-small)
+        # Paper: D_ii = H_i + 2rho(1-w_ii)I + I  (the "+I" = unit_reg is structural, not eps-small)
         D_inv = np.zeros((d, d, N))
         for i in range(N):
             w_ii = Wk[i, i]
@@ -115,15 +115,15 @@ def esom(x0: np.ndarray, prm: dict):
         for i in range(N):
             dirs[:, i, 0] = -D_inv[:, :, i] @ g_bar[:, i]
 
-        # (7) inner refinement — each round requires neighbours to share dirs
-        # B_ij: diagonal B_ii = ρ(1-w_ii), off-diagonal B_ij = ρ*w_ij
+        # (7) inner refinement - each round requires neighbours to share dirs
+        # B_ij: diagonal B_ii = rho(1-w_ii), off-diagonal B_ij = rho*w_ij
         # Self term B_ii*d_i^(k) is ALWAYS included regardless of w_ii > 0.
         # Bug fix: previous code skipped self contribution when w_ii=0.
         for kk in range(chi):
             if prm["countComm"]:
                 comm_total += compute_comm_cost(d, Wk, "vector", rounds=prm["NC"])
             for i in range(N):
-                # Self contribution: B_ii = alpha*(1-w_ii) — always include
+                # Self contribution: B_ii = alpha*(1-w_ii) - always include
                 tmp = alpha * (1.0 - Wk[i, i]) * dirs[:, i, kk]
                 # Neighbor contributions: B_ij = alpha*w_ij for j != i
                 for j in range(N):

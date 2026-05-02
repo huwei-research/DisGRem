@@ -1,5 +1,5 @@
 """
-generate_paper_table.py – Generate comprehensive LaTeX summary table.
+generate_paper_table.py - Generate comprehensive LaTeX summary table.
 
 Reads all summary_*.txt files from results/ directory and produces a
 publication-ready LaTeX table with columns:

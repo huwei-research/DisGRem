@@ -1,11 +1,11 @@
 """
-init_policy.py – Centralised parameter & initial-point policy.
+init_policy.py - Centralised parameter & initial-point policy.
 Ported from MATLAB: init_policy.m
 
 Each entry in M_alpha_policy may contain:
     M_factor  : scalar multiplier of L_max for M
     alpha     : step size numerator (actual alpha = alpha / L_max)
-    decay     : bool – whether to use α/√k decay
+    decay     : bool - whether to use alpha/√k decay
     maxIt     : per-function iteration limit (overrides global P["maxIt"])
 """
 
@@ -22,9 +22,9 @@ def init_policy(mode: str = "regular") -> Tuple[dict, dict, dict]:
 
     Returns
     -------
-    param_bank      : dict – obj_factory arguments per function name
-    M_alpha_policy  : dict (or list for 'parameter') – {M_factor, alpha, decay, maxIt}
-    x0_generator    : dict – callables (d, far) → x0
+    param_bank      : dict - obj_factory arguments per function name
+    M_alpha_policy  : dict (or list for 'parameter') - {M_factor, alpha, decay, maxIt}
+    x0_generator    : dict - callables (d, far) → x0
     """
     assert mode in ("regular", "robust", "parameter"), f"Unknown mode: {mode}"
     d_default = 30
@@ -52,7 +52,7 @@ def init_policy(mode: str = "regular") -> Tuple[dict, dict, dict]:
             "logreg_ncvr":          ["svmguide3", 0.05],
         }
 
-        # ── M–alpha–maxIt policy ────────────────────────────────────────────
+        # ── M-alpha-maxIt policy ────────────────────────────────────────────
         # alpha is the numerator: actual step size = alpha / L_max
         # maxIt overrides global setting; omitting means use global default
         # Notes on tolType:
@@ -106,7 +106,7 @@ def init_policy(mode: str = "regular") -> Tuple[dict, dict, dict]:
         return param_bank, M_alpha_policy, x0_generator
 
     else:  # 'parameter'
-        # ── parameter-sweep policy (5 × 4 = 20 configurations) ─────────────
+        # ── parameter-sweep policy (5 x 4 = 20 configurations) ─────────────
         param_bank = {"ridge": [d_default, 1e-3]}
 
         M_alpha_list = []

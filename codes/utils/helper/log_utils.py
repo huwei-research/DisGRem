@@ -1,5 +1,5 @@
 """
-log_utils.py – init_log, trim_log, compute_comm_cost, printProgress
+log_utils.py - init_log, trim_log, compute_comm_cost, printProgress
 Ported from MATLAB: init_log.m, trim_log.m, compute_comm_cost.m, printProgress.m
 """
 
@@ -57,7 +57,7 @@ def compute_comm_cost(d: int, W: np.ndarray,
     Parameters
     ----------
     d       : dimension of vector / matrix
-    W       : N×N mixing (adjacency) matrix
+    W       : NxN mixing (adjacency) matrix
     method  : 'vector' | 'full_matrix' | 'topk' | 'lowrank'
     param   : compression parameter (k for topk, r for lowrank)
     rounds  : number of gossip rounds

@@ -1,44 +1,42 @@
 """
-alg_bank.py – Algorithm registry.
+alg_bank.py - Algorithm registry.
 
 Algorithm taxonomy
 ------------------
 Second-order (exact Hessian):
-  DisGrem, CeDisGrem, AdaDisGrem, CeAdaDisGrem   – proposed family
-  DQM, ESOM                                        – 2nd-order baselines (classic)
-  SONATA, NetworkGIANT                             – 2nd-order baselines (recent)
+  DisGrem, CeDisGrem, AdaDisGrem, CeAdaDisGrem   - proposed family
+  DQM, ESOM                                        - 2nd-order baselines (classic)
+  SONATA, NetworkGIANT                             - 2nd-order baselines (recent)
 
 Quasi-Newton (gradient-only curvature approx):
-  DisGreQm                                         – proposed quasi-Newton
-  DisQN                                            – quasi-Newton baseline
+  DisGreQm                                         - proposed quasi-Newton
+  DisQN                                            - quasi-Newton baseline
 
 First-order (gradient-only):
-  EXTRA, DIGing                                    – 1st-order baselines
+  EXTRA, DIGing                                    - 1st-order baselines
 
 Mode groups
 -----------
 PRIMARY COMPARISON
-  MainComp     – Our 4 + EXTRA + DIGing + DQM + ESOM + SONATA + NetworkGIANT
-  MainCompCore – Our 4 + EXTRA + DIGing + DQM + ESOM  (legacy 8-alg set)
-  CEStudy      – DisGrem + CeDisGrem + AdaDisGrem + CeAdaDisGrem
+  MainComp     - Our 4 + EXTRA + DIGing + DQM + ESOM + SONATA + NetworkGIANT
+  MainCompCore - Our 4 + EXTRA + DIGing + DQM + ESOM
+  CEStudy      - DisGrem + CeDisGrem + AdaDisGrem + CeAdaDisGrem
 
 FULL / SUPPLEMENTARY
-  PaperFull    – All proposed (5) + all baselines
-  PaperSecond  – Our 4 + DQM + ESOM + SONATA + NetworkGIANT
-  All          – every registered algorithm
+  PaperFull    - All proposed (5) + all baselines
+  PaperSecond  - Our 4 + DQM + ESOM + SONATA + NetworkGIANT
+  All          - every registered algorithm
 
 THEMATIC SUBSETS
-  DisGremFamily– all 5 proposed algorithms
-  SecondOrder  – DQM + ESOM + SONATA + NetworkGIANT
-  FirstOrder   – EXTRA + DIGing
-  CeGroup      – CeDisGrem + CeAdaDisGrem
-  AdaGroup     – AdaDisGrem + CeAdaDisGrem
+  DisGremFamily- all 5 proposed algorithms
+  SecondOrder  - DQM + ESOM + SONATA + NetworkGIANT
+  FirstOrder   - EXTRA + DIGing
+  CeGroup      - CeDisGrem + CeAdaDisGrem
+  AdaGroup     - AdaDisGrem + CeAdaDisGrem
 """
 
 from __future__ import annotations
-from solvers.disgrem.disgrem import disgrem
 from solvers.disgrem.ce_disgrem import ce_disgrem
-from solvers.disgrem.ada_disgrem import ada_disgrem
 from solvers.disgrem.ce_ada_disgrem import ce_ada_disgrem
 from solvers.disgrem.dis_greqm import dis_greqm
 from solvers.baselines.extra import extra
@@ -49,15 +47,63 @@ from solvers.baselines.dis_qn import dis_qn
 from solvers.baselines.sonata import sonata
 from solvers.baselines.network_giant import network_giant
 
+
+def disgrem(x0, prm):
+    """Formal DisGrem wrapper using the log-schedule CE-capable solver."""
+    prm = dict(prm)
+    prm["compressH"] = False
+    prm["compressParam"] = None
+    prm["compressor"] = "vector"
+    prm["Klazy"] = 1
+    prm["adaptive_ce"] = False
+    prm["skip_H_premix"] = False
+    prm["NC_mat_cap"] = 3
+    prm["algName"] = "DisGrem"
+    return ce_disgrem(x0, prm)
+
+
+def ada_disgrem(x0, prm):
+    """Formal AdaDisGrem wrapper using the log-schedule CE-capable solver."""
+    prm = dict(prm)
+    prm["compressH"] = False
+    prm["compressParam"] = None
+    prm["compressor"] = "vector"
+    prm["Klazy"] = 1
+    prm["adaptive_ce"] = False
+    prm["skip_H_premix"] = False
+    prm["NC_mat_cap"] = 3
+    prm["algName"] = "AdaDisGrem"
+    return ce_ada_disgrem(x0, prm)
+
+
+def ce_disgrem_adaptive(x0, prm):
+    """Communication-efficient DisGrem with adaptive CE parameters."""
+    prm = dict(prm)
+    prm["adaptive_ce"] = True
+    prm["skip_H_premix"] = True
+    prm["NC_mat_cap"] = 2
+    prm["algName"] = "CeDisGrem"
+    return ce_disgrem(x0, prm)
+
+
+def ce_ada_disgrem_adaptive(x0, prm):
+    """Communication-efficient AdaDisGrem with adaptive CE parameters."""
+    prm = dict(prm)
+    prm["adaptive_ce"] = True
+    prm["skip_H_premix"] = True
+    prm["NC_mat_cap"] = 2
+    prm["algName"] = "CeAdaDisGrem"
+    return ce_ada_disgrem(x0, prm)
+
 # ── Master registry ────────────────────────────────────────────────────────
 #   Each entry: (name, callable, color_rgb, latex_label)
 #   Index:        0         1          2             3
 _REGISTRY = [
     # ── Proposed second-order (BLUE gradient, light → dark) ───────────────
     ("DisGrem",        disgrem,          (0.65, 0.81, 0.94), r"DisGrem"),         # 0
-    ("CeDisGrem",      ce_disgrem,       (0.39, 0.63, 0.85), r"CeDisGrem"),       # 1
+    ("CeDisGrem",      ce_disgrem_adaptive, (0.39, 0.63, 0.85), r"CeDisGrem"),    # 1
     ("AdaDisGrem",     ada_disgrem,      (0.17, 0.44, 0.70), r"AdaDisGrem"),       # 2
-    ("CeAdaDisGrem",   ce_ada_disgrem,   (0.03, 0.25, 0.53), r"CeAdaDisGrem"),    # 3
+    ("CeAdaDisGrem",   ce_ada_disgrem_adaptive, (0.03, 0.25, 0.53), r"CeAdaDisGrem"), # 3
     # ── Proposed quasi-Newton (AMBER accent) ──────────────────────────────
     ("DisGreQm",       dis_greqm,        (0.80, 0.52, 0.10), r"DisGre$\mathbb{Q}$m"),  # 4
     # ── First-order baselines (ORANGE family) ─────────────────────────────

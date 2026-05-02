@@ -1,5 +1,5 @@
 """
-dqm.py – DQM: Decentralised Quadratically Approximated ADMM.
+dqm.py - DQM: Decentralised Quadratically Approximated ADMM.
 Reference: Mokhtari, Shi, Ling, Ribeiro, IEEE TSP 2016 (arXiv:1510.07356).
 
 Algorithm 1 (paper, at node i):
@@ -97,7 +97,7 @@ def dqm(x0: np.ndarray, prm: dict):
             except np.linalg.LinAlgError:
                 X_new[:, i] = np.linalg.lstsq(M_mat, rhs, rcond=None)[0]
 
-        # (3) exchange x_new with neighbours — one communication round
+        # (3) exchange x_new with neighbours - one communication round
         if prm["countComm"]:
             comm_total += compute_comm_cost(d, Wk, "vector", rounds=prm["NC"])
 
