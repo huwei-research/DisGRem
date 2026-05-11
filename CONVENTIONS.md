@@ -550,7 +550,7 @@ On a new machine, run the following to get all three projects:
 ```bash
 # Clone all repositories
 git clone https://github.com/huwei0121/BUPTR.git
-git clone https://github.com/huwei0121/DFOETR.git
+git clone https://github.com/huwei0121/MATRO.git
 git clone https://github.com/huwei0121/DisGRem.git
 ```
 
@@ -569,7 +569,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Repeat for `DFOETR` and `DisGRem`.
+Repeat for `MATRO` and `DisGRem`.
 
 ### 9.2 Daily Sync (Pull / Push)
 
@@ -638,7 +638,7 @@ Each project provides plotting scripts that read CSV data and produce figures:
 | BUPTR    | `python experiments/analysis/replot_profiles.py`       | Regenerate performance profiles    |
 | BUPTR    | `python experiments/analysis/plot_convergence_grid.py` | Regenerate convergence grids       |
 | DisGRem  | `python scripts/replot.py`                             | Regenerate all result figures      |
-| DFOETR   | `python utils/plot_trajectory_2d.py`                   | Regenerate trajectory plots        |
+| MATRO   | `python utils/plot_trajectory_2d.py`                   | Regenerate trajectory plots        |
 
 ### 10.2 General Workflow
 
