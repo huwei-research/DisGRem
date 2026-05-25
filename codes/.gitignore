@@ -7,3 +7,7 @@ venv/
 
 # Large raw data kept locally
 results/**/raw_runs.csv
+
+# Experiment resume caches
+_run_cache/
+*.pkl

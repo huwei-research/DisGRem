@@ -14,6 +14,7 @@ env/
 # IDE
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 *~
@@ -38,6 +39,10 @@ desktop.ini
 !paper/**/*.png
 !presentation/**/*.pdf
 !presentation/**/*.png
+
+# Experiment caches and pickles
+_run_cache/
+*.pkl
 
 # LaTeX build artifacts (paper + beamer)
 *.aux

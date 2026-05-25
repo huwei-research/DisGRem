@@ -14,3 +14,9 @@
 
 # Shell scripts must be LF
 *.sh   text eol=lf
+
+# Exclude from GitHub Release source archives (git archive / download zip)
+paper/                    export-ignore
+CONVENTIONS.md            export-ignore
+SETUP_NEW_MACHINE.md      export-ignore
+.cursor/                  export-ignore

@@ -305,14 +305,15 @@
 	$(i,j) \in \mathcal{E}$ or $i=j$.
 	We assume that $W$ has positive diagonal entries and satisfies
 	$W_{ij}\ge0$, $W\one=\one$, $\one^\top W=\one^\top$.
-	Let $\J:=\frac{1}{N}\one\one^\top$ denote the averaging projector,
-	$\Pmat:=I-\J$ the complementary projector, and
-	\[
-	\rho := \normtwo{W-\J}\in[0,1).
-	\]
+	The averaging projector is defined by
+	$\J:=\frac{1}{N}\one\one^\top$, and the complementary projector
+	is $\Pmat:=I-\J$.
+	We denote the mixing rate $\rho := \normtwo{W-\J}$.
 	The positive diagonal condition is satisfied by the
 	Metropolis--Hastings weights used in our experiments and rules out
 	the periodic case in which an eigenvalue~$-1$ would give $\rho=1$.
+	Since the graph is connected (see Assumption~\ref{ass:problem}\,(ii)),
+	$1$ is the unique largest eigenvalue of $W$, and therefore $\rho<1$.
 	For stacked vectors $Z=[z_1;\dots;z_N]\in\R^{Nd}$ we use the
 	Euclidean norm $\|Z\|$ and write $\bar z:=\frac1N\sum_{i=1}^N z_i$
 	for the average.
@@ -391,8 +392,8 @@
 			\qquad
 			\normtwo{\nabla^2 f_i(x)-\nabla^2 f_i(y)}\le L_2\norm{x-y}.
 			\]
-			\item $W$ is symmetric, doubly stochastic, has positive diagonal
-			entries, and $\rho=\normtwo{W-\J}<1$.
+		\item The graph $\mathcal G$ is connected and $W$ is symmetric,
+		doubly stochastic, and has positive diagonal entries.
 			\item The average objective $f$ is coercive: $f(x)\to+\infty$ as $\|x\|\to\infty$.
 			Equivalently, for every $c\in\R$ the sublevel set $\{x:f(x)\le c\}$ is bounded.
 		\end{enumerate}
@@ -1056,18 +1057,18 @@
 		\begin{enumerate}[leftmargin=1.2em,itemsep=2pt]
 			\item Dispersion control:
 			\[
-			\|\bar s_k-s_k^{\mathrm{ref}}\|\le \frac{\eta}{8}\cdot \frac{\lambda_k}{M_{H,\max}+\lambda_k}\,\|\bar s_k\|.
+			\|\bar s_k-s_k^{\mathrm{ref}}\|\le \frac{\eta}{8}\cdot \frac{\lambda_k}{M_{H,\max}+\lambda_k}\,\|\bar s_k\|;
 			\]
 			\item Gradient bridge accuracy:
 			\[
-			L_1D(X_k)\le \frac{\eta}{8}\lambda_k\|\bar s_k\|.
+			L_1D(X_k)\le \frac{\eta}{8}\lambda_k\|\bar s_k\|;
 			\]
-			\item Hessian bridge accuracy:
-			\[
-			L_2D(X_k)\le \frac{\eta}{8}\lambda_k.
-			\]
-		\end{enumerate}
-		then
+		\item Hessian bridge accuracy:
+		\[
+		L_2D(X_k)\le \frac{\eta}{8}\lambda_k,
+		\]
+	\end{enumerate}
+	then
 		\[
 		\|r_k\|\le \eta\,\lambda_k\|\bar s_k\|,
 		\qquad
@@ -2181,7 +2182,7 @@
 	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	
 	\section*{Acknowledgments}
-	The work of W.~Hu, Y.-X.~Yuan, and L.~Zhang was supported in part by NSFC and the Chinese Academy of Sciences.
+	The work of W.~Hu, Y.-X.~Yuan, and L.~Zhang was supported in part by NSFC (Grant 12288201) and the Chinese Academy of Sciences.
 	The work of P.~Xie was supported in part by the U.S.\ Department of Energy, Office of Science.
 	
 	\bibliographystyle{siamplain}
@@ -2190,63 +2191,63 @@
 		\bibitem[Cartis et~al.(2011)Cartis, Gould, and Toint]{cartis2011arc}
 		C.~Cartis, N.~I.~M. Gould, and Ph.~L. Toint.
 		\newblock Adaptive cubic regularisation methods for unconstrained optimization. Part~I: motivation, convergence and numerical results.
-		\newblock Mathematical Programming, 127:245--295, 2011.
+		\newblock \textit{Mathematical Programming}, 127:245--295, 2011.
 		
 		\bibitem[Chang and Lin(2011)]{chang2011libsvm}
 		C.-C.~Chang and C.-J.~Lin.
 		\newblock {LIBSVM}: a library for support vector machines.
-		\newblock ACM Transactions on Intelligent Systems and Technology, 2(3):27:1--27:27, 2011.
+		\newblock \textit{ACM Transactions on Intelligent Systems and Technology}, 2(3):27:1--27:27, 2011.
 		\newblock Software available at \url{https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/}.
 		
 		\bibitem[Eisen et~al.(2017)Eisen, Mokhtari, and Ribeiro]{eisen2017dqn}
 		M.~Eisen, A.~Mokhtari, and A.~Ribeiro.
 		\newblock Decentralized quasi-{N}ewton methods.
-		\newblock IEEE Transactions on Signal Processing, 65(10):2613--2628, 2017.
+		\newblock \textit{IEEE Transactions on Signal Processing}, 65(10):2613--2628, 2017.
 		
 		\bibitem[Jakoveti{\'c} et~al.(2014)Jakoveti{\'c}, Xavier, and Moura]{jakovetic2014fast}
 		D.~Jakoveti{\'c}, J.~Xavier, and J.~M.~F. Moura.
 		\newblock Fast distributed gradient methods.
-		\newblock IEEE Transactions on Automatic Control, 59(5):1131--1146, 2014.
+		\newblock \textit{IEEE Transactions on Automatic Control}, 59(5):1131--1146, 2014.
 		
 		\bibitem[Mishchenko(2023)]{mishchenko2023rn}
 		K.~Mishchenko.
 		\newblock Regularized {N}ewton method with global $O(1/k^2)$ convergence.
-		\newblock SIAM Journal on Optimization, 33(3):1440--1462, 2023.
+		\newblock \textit{SIAM Journal on Optimization}, 33(3):1440--1462, 2023.
 		
 		\bibitem[Mokhtari et~al.(2017)Mokhtari, Ling, and Ribeiro]{mokhtari2017networknewton}
 		A.~Mokhtari, Q.~Ling, and A.~Ribeiro.
 		\newblock Network {N}ewton distributed optimization methods.
-		\newblock IEEE Transactions on Signal Processing, 65(1):146--161, 2017.
+		\newblock \textit{IEEE Transactions on Signal Processing}, 65(1):146--161, 2017.
 		
 		\bibitem[Zhang et~al.(2021b)Zhang, Ling, and So]{zhang2021newtontracking}
 		J.~Zhang, Q.~Ling, and A.~M.-C. So.
 		\newblock A {N}ewton tracking algorithm with exact linear convergence for decentralized consensus optimization.
-		\newblock IEEE Transactions on Signal and Information Processing over Networks, 7:346--358, 2021.
+		\newblock \textit{IEEE Transactions on Signal and Information Processing over Networks}, 7:346--358, 2021.
 		
 		\bibitem[Nedi{\'c} and Ozdaglar(2009)]{nedic2009subgradient}
 		A.~Nedi{\'c} and A.~Ozdaglar.
 		\newblock Distributed subgradient methods for multi-agent optimization.
-		\newblock IEEE Transactions on Automatic Control, 54(1):48--61, 2009.
+		\newblock \textit{IEEE Transactions on Automatic Control}, 54(1):48--61, 2009.
 		
 		\bibitem[Nedi{\'c} et~al.(2017)Nedi{\'c}, Olshevsky, and Shi]{nedic2017diging}
 		A.~Nedi{\'c}, A.~Olshevsky, and W.~Shi.
 		\newblock Achieving geometric convergence for distributed optimization over time-varying graphs.
-		\newblock SIAM Journal on Optimization, 27(4):2597--2633, 2017.
+		\newblock \textit{SIAM Journal on Optimization}, 27(4):2597--2633, 2017.
 		
 		\bibitem[Nesterov and Polyak(2006)]{nesterov2006cubic}
 		Y.~Nesterov and B.~T. Polyak.
 		\newblock Cubic regularization of {N}ewton method and its global performance.
-		\newblock Mathematical Programming, 108:177--205, 2006.
+		\newblock \textit{Mathematical Programming}, 108:177--205, 2006.
 		
 		\bibitem[Shi et~al.(2015)Shi, Ling, Wu, and Yin]{shi2015extra}
 		W.~Shi, Q.~Ling, G.~Wu, and W.~Yin.
 		\newblock {EXTRA}: an exact first-order algorithm for decentralized consensus optimization.
-		\newblock SIAM Journal on Optimization, 25(2):944--966, 2015.
+		\newblock \textit{SIAM Journal on Optimization}, 25(2):944--966, 2015.
 		
 		\bibitem[Sun et~al.(2022)Sun, Scutari, and Palomar]{sun2022sonata}
 		Y.~Sun, G.~Scutari, and D.~P. Palomar.
 		\newblock Distributed nonconvex optimization and learning based on successive convex approximation.
-		\newblock IEEE Transactions on Signal Processing, 70:5900--5915, 2022.
+		\newblock \textit{IEEE Transactions on Signal Processing}, 70:5900--5915, 2022.
 		
 		\bibitem[Maritan et~al.(2023)Maritan, Sharma, Schenato, and Dey]{maritan2023networkgiant}
 		A.~Maritan, G.~Sharma, L.~Schenato, and S.~Dey.
@@ -2256,19 +2257,19 @@
 		\bibitem[Yuan et~al.(2019)Yuan, Ying, and Sayed]{yuan2019exactdiffusion}
 		K.~Yuan, B.~Ying, and A.~H. Sayed.
 		\newblock Exact diffusion for distributed optimization and learning---Part {I}: algorithm development.
-		\newblock IEEE Transactions on Signal Processing, 67(3):708--723, 2019.
+		\newblock \textit{IEEE Transactions on Signal Processing}, 67(3):708--723, 2019.
 		
 		% -- New references added during revision --
 		
 		\bibitem[Jakoveti{\'c} et~al.(2025)Jakoveti{\'c}, Kreji{\'c}, and Malaspina]{jakovetic2025dinas}
 		D.~Jakoveti{\'c}, N.~Kreji{\'c}, and G.~Malaspina.
 		\newblock {DINAS}: Distributed inexact {N}ewton method with adaptive step sizes.
-		\newblock Computational Optimization and Applications, 91:683--715, 2025.
+		\newblock \textit{Computational Optimization and Applications}, 91:683--715, 2025.
 		
 		\bibitem[Daneshmand et~al.(2021)Daneshmand, Scutari, Dvurechensky, and Gasnikov]{daneshmand2021newton}
 		A.~Daneshmand, G.~Scutari, P.~Dvurechensky, and A.~Gasnikov.
 		\newblock Newton method over networks is fast up to the statistical precision.
-		\newblock In Proceedings of the 38th International Conference on Machine Learning (ICML), volume 139 of PMLR, pp.~2398--2409, 2021.
+		\newblock In \textit{Proceedings of the 38th International Conference on Machine Learning (ICML)}, volume 139 of PMLR, pp.~2398--2409, 2021.
 		
 		\bibitem[Gratton et~al.(2023)Gratton, Jerad, and Toint]{gratton2023nonconvex}
 		S.~Gratton, S.~Jerad, and Ph.~L. Toint.
@@ -2278,7 +2279,7 @@
 		\bibitem[Doikov and Nesterov(2024)]{doikov2024gradient}
 		N.~Doikov and Y.~Nesterov.
 		\newblock Gradient regularization of {N}ewton method with {B}regman distances.
-		\newblock Mathematical Programming, 204:1--25, 2024.
+		\newblock \textit{Mathematical Programming}, 204:1--25, 2024.
 		
 		\bibitem[Yuan et~al.(2023b)Yuan, Li, and Ling]{yuan2023indo}
 		G.~Yuan, X.~Li, and Q.~Ling.
@@ -2288,87 +2289,87 @@
 		\bibitem[Zhang et~al.(2024)Zhang, Che, Yang, and others]{zhang2024cubic}
 		Z.~Zhang, K.~Che, S.~Yang, et~al.
 		\newblock Communication-efficient distributed cubic {N}ewton with compressed lazy {H}essian.
-		\newblock Neural Networks, 174:106212, 2024.
+		\newblock \textit{Neural Networks}, 174:106212, 2024.
 		
 		\bibitem[Alghunaim et~al.(2021)Alghunaim, Ryu, Yuan, and Sayed]{alghunaim2021decentralized}
 		S.~A. Alghunaim, E.~K. Ryu, K.~Yuan, and A.~H. Sayed.
 		\newblock Decentralized proximal gradient algorithms with linear convergence rates.
-		\newblock IEEE Transactions on Automatic Control, 66(6):2787--2794, 2021.
+		\newblock \textit{IEEE Transactions on Automatic Control}, 66(6):2787--2794, 2021.
 		
 		\bibitem[Bajovi{\'c} et~al.(2017)Bajovi{\'c}, Jakoveti{\'c}, Kre\-ji{\'c}, and Krklec~Jerinki{\'c}]{bajovic2017newton}
 		D.~Bajovi{\'c}, D.~Jakoveti{\'c}, N.~Kre\-ji{\'c}, and N.~Krklec~Jerinki{\'c}.
 		\newblock Newton-like method with diagonal correction for distributed optimization.
-		\newblock SIAM Journal on Optimization, 27(2):1171--1203, 2017.
+		\newblock \textit{SIAM Journal on Optimization}, 27(2):1171--1203, 2017.
 		
 		\bibitem[Beznosikov et~al.(2022)Beznosikov, Richt{\\'a}rik, Diskin, and others]{beznosikov2022biased}
 		A.~Beznosikov, P.~Richt{\\'a}rik, M.~Diskin, et~al.
 		\newblock Distributed methods with compressed communication for solving variational inequalities, with theoretical guarantees.
-		\newblock In Advances in Neural Information Processing Systems (NeurIPS), 35:14013--14029, 2022.
+		\newblock In \textit{Advances in Neural Information Processing Systems (NeurIPS)}, 35:14013--14029, 2022.
 		
 		\bibitem[Doikov and Nesterov(2022)]{doikov2022tensor}
 		N.~Doikov and Y.~Nesterov.
 		\newblock Local convergence of tensor methods.
-		\newblock Mathematical Programming, 193:315--336, 2022.
+		\newblock \textit{Mathematical Programming}, 193:315--336, 2022.
 		
 		\bibitem[Doikov et~al.(2023)Doikov, Chayti, and Jaggi]{doikov2023lazy}
 		N.~Doikov, E.~M.~Chayti, and M.~Jaggi.
 		\newblock Second-order optimization with lazy {H}essians.
-		\newblock In Proceedings of the International Conference on Machine Learning (ICML), 2023.
+		\newblock In \textit{Proceedings of the International Conference on Machine Learning (ICML)}, 2023.
 		
 		\bibitem[Koloskova et~al.(2019)Koloskova, Stich, and Jaggi]{koloskova2019decentralized}
 		A.~Koloskova, S.~U. Stich, and M.~Jaggi.
 		\newblock Decentralized stochastic optimization and gossip algorithms with compressed communication.
-		\newblock In Proceedings of the International Conference on Machine Learning (ICML), pp.~3478--3487, 2019.
+		\newblock In \textit{Proceedings of the International Conference on Machine Learning (ICML)}, pp.~3478--3487, 2019.
 		
 		\bibitem[Li and Lin(2024)]{li2024decentralized}
 		H.~Li and Z.~Lin.
 		\newblock Accelerated gradient tracking over time-varying graphs for decentralized optimization.
-		\newblock Journal of Machine Learning Research, 25(274):1--52, 2024.
+		\newblock \textit{Journal of Machine Learning Research}, 25(274):1--52, 2024.
 		
 		\bibitem[Mokhtari et~al.(2016)Mokhtari, Shi, Ling, and Ribeiro]{mokhtari2016esom}
 		A.~Mokhtari, W.~Shi, Q.~Ling, and A.~Ribeiro.
 		\newblock {ESOM}: A second-order method for exact decentralized optimization over networks.
-		\newblock IEEE Transactions on Signal and Information Processing over Networks, 2(4):507--522, 2016.
+		\newblock \textit{IEEE Transactions on Signal and Information Processing over Networks}, 2(4):507--522, 2016.
 		
 		\bibitem[Pu and Nedi{\'c}(2021)]{pu2021distributed}
 		S.~Pu and A.~Nedi{\'c}.
 		\newblock Distributed stochastic gradient tracking methods.
-		\newblock Mathematical Programming, 187:409--457, 2021.
+		\newblock \textit{Mathematical Programming}, 187:409--457, 2021.
 		
 		\bibitem[Xin and Khan(2020)]{xin2020distributed}
 		R.~Xin and U.~A. Khan.
 		\newblock Distributed heavy-ball: a generalization and acceleration of first-order methods with gradient tracking.
-		\newblock IEEE Transactions on Automatic Control, 65(6):2627--2633, 2020.
+		\newblock \textit{IEEE Transactions on Automatic Control}, 65(6):2627--2633, 2020.
 		
 		\bibitem[Li et~al.(2020)Li, Cen, Chen, and others]{li2020communication}
 		B.~Li, S.~Cen, Y.~Chen, et~al.
 		\newblock Communication-efficient distributed optimization in networks with gradient tracking and variance reduction.
-		\newblock Journal of Machine Learning Research, 21(180):1--51, 2020.
+		\newblock \textit{Journal of Machine Learning Research}, 21(180):1--51, 2020.
 		
 		\bibitem[Nesterov(2005)]{nesterov2005smooth}
 		Y.~Nesterov.
 		\newblock Smooth minimization of non-smooth functions.
-		\newblock Mathematical Programming, 103(1):127--152, 2005.
+		\newblock \textit{Mathematical Programming}, 103(1):127--152, 2005.
 		
 		\bibitem[Charbonnier et~al.(1997)Charbonnier, Blanc-F{\'e}raud, Aubert, and Barlaud]{charbonnier1997huber}
 		P.~Charbonnier, L.~Blanc-F{\'e}raud, G.~Aubert, and M.~Barlaud.
 		\newblock Deterministic edge-preserving regularization in computed imaging.
-		\newblock IEEE Transactions on Image Processing, 6(2):298--311, 1997.
+		\newblock \textit{IEEE Transactions on Image Processing}, 6(2):298--311, 1997.
 		
 		\bibitem[Rosenbrock(1960)]{rosenbrock1960automatic}
 		H.~H.~Rosenbrock.
 		\newblock An automatic method for finding the greatest or least value of a function.
-		\newblock The Computer Journal, 3(3):175--184, 1960.
+		\newblock \textit{The Computer Journal}, 3(3):175--184, 1960.
 		
 		\bibitem[Styblinski and Tang(1990)]{styblinski1990experiments}
 		M.~A.~Styblinski and T.~S.~Tang.
 		\newblock Experiments in nonconvex optimization: Stochastic approximation with function smoothing and simulated annealing.
-		\newblock Neural Networks, 3(4):467--483, 1990.
+		\newblock \textit{Neural Networks}, 3(4):467--483, 1990.
 		
 		\bibitem[Geman and Yang(1995)]{geman1995nonlinear}
 		D.~Geman and C.~Yang.
 		\newblock Nonlinear image recovery with half-quadratic regularization.
-		\newblock IEEE Transactions on Image Processing, 4(7):932--946, 1995.
+		\newblock \textit{IEEE Transactions on Image Processing}, 4(7):932--946, 1995.
 		
 	\end{thebibliography}
 	
@@ -3173,10 +3174,10 @@
 		\begin{align*}
 			(W\!-\!\J)^{t+1}&=(W\!-\!\J)^t(W\!-\!\J)\\
 			&=(W^t\!-\!\J)(W\!-\!\J)\\
-			&=W^{t+1}\!-\!W^t\J\!-\!\J W\!+\!\J^2\\
+			&=W^{t+1}\!-\!W^t\J\!-\!\J W\!+\!\Jpar^2\\
 			&=W^{t+1}\!-\!\J,
 		\end{align*}
-		using $W^t\J=\J$, $\J W=\J$, and $\J^2=\J$.
+		using $W^t\J=\J$, $\J W=\J$, and $\Jpar^2=\J$.
 		Thus $\|W^t-\J\|_2=\|(W-\J)^t\|_2\le \|W-\J\|_2^t=\rho^t$.
 		For stacked vectors, $\|(A\otimes I_d)\|_2=\|A\|_2$.
 	\end{proof}
