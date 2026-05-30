@@ -1,0 +1,16 @@
+# Force LF for all text files (consistent across Windows/Linux/macOS)
+* text=auto eol=lf
+
+# Explicitly mark binary files
+*.pdf  binary
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.xlsx binary
+*.xls  binary
+*.gz   binary
+*.zip  binary
+*.7z   binary
+
+# Shell scripts must be LF
+*.sh   text eol=lf

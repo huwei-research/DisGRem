@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the paper below."
+title: "DisGRem: Distributed Gradient-Regularized Newton Method"
+type: software
+license: MIT
+url: "https://github.com/huwei0121/DisGRem"
+authors:
+  - family-names: Hu
+    given-names: Wei
+    email: huwei@amss.ac.cn
+    affiliation: "Academy of Mathematics and Systems Science, Chinese Academy of Sciences"
+  - family-names: Xie
+    given-names: Pengcheng
+    affiliation: "Lawrence Berkeley National Laboratory"
+  - family-names: Yuan
+    given-names: Ya-Xiang
+    affiliation: "Academy of Mathematics and Systems Science, Chinese Academy of Sciences"
+  - family-names: Zhang
+    given-names: Li
+    affiliation: "Academy of Mathematics and Systems Science, Chinese Academy of Sciences"
+preferred-citation:
+  type: article
+  title: "Distributed Gradient-Regularized Newton Method: Scheduled Consensus and O(epsilon^{-1}) Global Iteration Complexity"
+  authors:
+    - family-names: Hu
+      given-names: Wei
+    - family-names: Xie
+      given-names: Pengcheng
+    - family-names: Yuan
+      given-names: Ya-Xiang
+    - family-names: Zhang
+      given-names: Li
+  year: 2026
+  journal: "arXiv preprint arXiv:2605.19396"
+  url: "https://arxiv.org/abs/2605.19396"

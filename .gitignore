@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Virtual environments
+.venv*/
+venv/
+env/
+
+# IDE / editor config
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Generated figures (regenerate locally with plotting scripts)
+*.pdf
+*.png
+*.jpg
+*.eps
+*.svg
+
+# Experiment caches and pickles
+_run_cache/
+*.pkl
+
+# Private / local-only directories and files
+paper/
+CONVENTIONS.md
+SETUP_NEW_MACHINE.md
+
+# LaTeX build artifacts
+*.aux
+*.out
+*.thm
+*.bbl
+*.blg
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.run.xml
+*.bcf
+*.xdv
+texput.log
+*.nav
+*.snm
+*.toc
+*.vrb
+
+# Scratch/temporary results
+codes/results/scratch/
